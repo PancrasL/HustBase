@@ -164,7 +164,6 @@ void CHustBaseApp::OnAppAbout()
 void CHustBaseApp::OnCreateDB()
 {
 	//关联创建数据库按钮，此处应提示用户输入数据库的存储路径和名称，并调用CreateDB函数创建数据库。
-
 	LPITEMIDLIST rootLoation;
 	BROWSEINFO bi;
 	char szPathName[MAX_PATH];
@@ -199,7 +198,6 @@ void CHustBaseApp::OnCreateDB()
 void CHustBaseApp::OnOpenDB() 
 {
 	//关联打开数据库按钮，此处应提示用户输入数据库所在位置，并调用OpenDB函数改变当前数据库路径，并在界面左侧的控件中显示数据库中的表、列信息。
-	//关联打开数据库按钮 
 	LPITEMIDLIST rootLoation;
 	BROWSEINFO bi;
 	RC rc;
@@ -210,7 +208,7 @@ void CHustBaseApp::OnOpenDB()
 		return;
 	}
 	ZeroMemory(&bi, sizeof(bi));
-	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，不指定的话则为我的电脑
+	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，默认是桌面
 	LPITEMIDLIST targetLocation = SHBrowseForFolder(&bi);
 	if (targetLocation != NULL) {
 		SHGetPathFromIDList(targetLocation, dbName);
@@ -235,8 +233,6 @@ void CHustBaseApp::OnOpenDB()
 void CHustBaseApp::OnDropDb() 
 {
 	//关联删除数据库按钮，此处应提示用户输入数据库所在位置，并调用DropDB函数删除数据库的内容。
-		//关联删除数据库按钮
-	//关联打开数据库按钮 
 	LPITEMIDLIST rootLoation;
 	BROWSEINFO bi;
 	RC rc;
@@ -248,7 +244,7 @@ void CHustBaseApp::OnDropDb()
 		return;
 	}
 	ZeroMemory(&bi, sizeof(bi));
-	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，不指定的话则为我的电脑
+	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，默认是桌面
 	LPITEMIDLIST targetLocation = SHBrowseForFolder(&bi);
 	if (targetLocation != NULL) {
 		SHGetPathFromIDList(targetLocation, targetPath);
