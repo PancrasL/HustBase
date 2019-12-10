@@ -127,6 +127,16 @@ RC execute(char * sql){
 }
 
 RC CreateDB(char *dbpath,char *dbname){
+	//设置当前目录为dbpath，其中dbPath包含有dbName；
+	SetCurrentDirectory(dbpath);
+	RC rc;
+	//创建系统表文件和系统列文件
+	rc = RM_CreateFile("SYSTABLES", sizeof(SysTable));
+	if (rc != SUCCESS)
+		return rc;
+	rc = RM_CreateFile("SYSCOLUMNS", sizeof(SysColumn));
+	if (rc != SUCCESS)
+		return rc;
 	return SUCCESS;
 }
 

@@ -164,14 +164,99 @@ void CHustBaseApp::OnAppAbout()
 void CHustBaseApp::OnCreateDB()
 {
 	//关联创建数据库按钮，此处应提示用户输入数据库的存储路径和名称，并调用CreateDB函数创建数据库。
+
+	LPITEMIDLIST rootLoation;
+	BROWSEINFO bi;
+	char szPathName[MAX_PATH];
+	char szTitle[] = "选择路径";
+	CString str;
+	char *dbPath, *dbName;
+	RC rc;
+
+	SHGetSpecialFolderLocation(NULL, CSIDL_DESKTOP, &rootLoation);
+	if (rootLoation == NULL) {
+		return;
+	}
+	ZeroMemory(&bi, sizeof(BROWSEINFO));
+	bi.pszDisplayName = szPathName;
+	bi.lpszTitle = szTitle;
+	bi.ulFlags = 0x0040;
+	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，默认是桌面
+
+	LPITEMIDLIST idl = SHBrowseForFolder(&bi);
+	SHGetPathFromIDList(idl, str.GetBuffer(MAX_PATH * 2));
+	str.ReleaseBuffer();
+	BOOL bRet = CreateDirectory(str, NULL);//创建文件夹
+
+	dbPath = str.GetBuffer(0);
+	dbName = szPathName;
+	rc = CreateDB(dbPath, dbName);
+	if (rc != SUCCESS) {
+		return;
+	}
 }
 
 void CHustBaseApp::OnOpenDB() 
 {
 	//关联打开数据库按钮，此处应提示用户输入数据库所在位置，并调用OpenDB函数改变当前数据库路径，并在界面左侧的控件中显示数据库中的表、列信息。
+	//关联打开数据库按钮 
+	LPITEMIDLIST rootLoation;
+	BROWSEINFO bi;
+	RC rc;
+	TCHAR dbName[MAX_PATH];
+
+	SHGetSpecialFolderLocation(NULL, CSIDL_DESKTOP, &rootLoation);
+	if (rootLoation == NULL) {
+		return;
+	}
+	ZeroMemory(&bi, sizeof(bi));
+	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，不指定的话则为我的电脑
+	LPITEMIDLIST targetLocation = SHBrowseForFolder(&bi);
+	if (targetLocation != NULL) {
+		SHGetPathFromIDList(targetLocation, dbName);
+	}
+
+	SetCurrentDirectory(dbName);
+	int i, j;
+	if ((i = access("SYSTABLES", 0)) != 0 || (j = access("SYSCOLUMNS", 0)) != 0) {
+		AfxMessageBox("打开的不是数据库");
+		return;
+	}
+	CHustBaseApp::pathvalue = true;
+	CHustBaseDoc *pDoc;
+	pDoc = CHustBaseDoc::GetDoc();
+	pDoc->m_pTreeView->PopulateTree();
+	rc = OpenDB(dbName);
+	if (rc != SUCCESS) {
+		return;
+	}
 }
 
 void CHustBaseApp::OnDropDb() 
 {
 	//关联删除数据库按钮，此处应提示用户输入数据库所在位置，并调用DropDB函数删除数据库的内容。
+		//关联删除数据库按钮
+	//关联打开数据库按钮 
+	LPITEMIDLIST rootLoation;
+	BROWSEINFO bi;
+	RC rc;
+	TCHAR targetPath[MAX_PATH];
+	char *dbName;
+
+	SHGetSpecialFolderLocation(NULL, CSIDL_DESKTOP, &rootLoation);
+	if (rootLoation == NULL) {
+		return;
+	}
+	ZeroMemory(&bi, sizeof(bi));
+	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，不指定的话则为我的电脑
+	LPITEMIDLIST targetLocation = SHBrowseForFolder(&bi);
+	if (targetLocation != NULL) {
+		SHGetPathFromIDList(targetLocation, targetPath);
+	}
+	CHustBaseApp::pathvalue = false;
+	dbName = targetPath;
+	rc = DropDB(dbName);
+	if (rc != SUCCESS) {
+		return;
+	}
 }

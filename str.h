@@ -140,6 +140,23 @@ typedef struct {
  	union sqls sstr;
 }sqlstr;
 
+//系统表结构体
+typedef struct {
+	char tabName[21];	//表名
+	int attrCount;	//表中属性的数量
+}SysTable;
+
+//系统列结构体
+typedef struct {
+	char tabName[21];	//表名
+	char attrName[21];	//属性名
+	AttrType attrType;	//属性类型
+	int attrLength;	//属性的长度
+	int attrOffset;	//属性的偏移量
+	char ix_flag;	//是否存在索引
+	char ixName[21];	//索引的名称
+}SysColumn;
+
 #ifndef RC_HH
 #define RC_HH
 typedef enum{
