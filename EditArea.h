@@ -19,10 +19,10 @@ public:
 	CEditArea();           // protected constructor used by dynamic creation
 	DECLARE_DYNCREATE(CEditArea)
 
-// Attributes
+	// Attributes
 public:
 	virtual ~CEditArea();
-	
+
 	//select.c ÀïµÄº¯Êý
 
 	//void	readdic(struct tab_dic_type *tab,int *tab_num,struct col_dic_type *col,int *col_num)
@@ -30,24 +30,24 @@ public:
 
 // Operations
 public:
-	void ShowMessage(int,char**);
-	void ShowSelResult(int col_num,int row_num,char ** fields,char *** result);
+	void ShowMessage(int, char**);
+	void ShowSelResult(int col_num, int row_num, char ** fields, char *** result);
 	void showSelResult(int row_num, int col_num);
-	int iReadDictstruct(char tabname[][20],int *tabnum,char colname[][20][20],int colnum[],AttrType coltype[][20],int collength[][20],int coloffset[][20],int iscolindex[][20]);
+	int iReadDictstruct(char tabname[][20], int *tabnum, char colname[][20][20], int colnum[], AttrType coltype[][20], int collength[][20], int coloffset[][20], int iscolindex[][20]);
 	void displayInfo();
 	CHustBaseDoc* GetDocument();
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CEditArea)
-	public:
+	// Overrides
+		// ClassWizard generated virtual function overrides
+		//{{AFX_VIRTUAL(CEditArea)
+public:
 	virtual void OnInitialUpdate();
-	protected:
+protected:
 	virtual void OnDraw(CDC* pDC);      // overridden to draw this view
 	//}}AFX_VIRTUAL
 
 // Implementation
 protected:
-//	virtual ~CEditArea();
+	//	virtual ~CEditArea();
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 	virtual void Dump(CDumpContext& dc) const;
@@ -67,7 +67,9 @@ protected:
 
 #ifndef _DEBUG  // debug version in HustBaseView.cpp
 inline CHustBaseDoc* CEditArea::GetDocument()
-{ return (CHustBaseDoc*)m_pDocument; }
+{
+	return (CHustBaseDoc*)m_pDocument;
+}
 #endif
 
 /////////////////////////////////////////////////////////////////////////////

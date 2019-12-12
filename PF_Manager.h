@@ -20,17 +20,17 @@
 #define PF_PAGESIZE (1<<12)
 typedef unsigned int PageNum;
 
-typedef struct{
+typedef struct {
 	PageNum pageNum;
 	char pData[PF_PAGE_SIZE];
 }Page;
 
-typedef struct{
+typedef struct {
 	PageNum pageCount;
 	int nAllocatedPages;
 }PF_FileSubHeader;
 
-typedef struct{
+typedef struct {
 	bool bDirty;
 	unsigned int pinCount;
 	clock_t  accTime;
@@ -39,7 +39,7 @@ typedef struct{
 	Page page;
 }Frame;
 
-typedef struct{
+typedef struct {
 	bool bopen;
 	char *fileName;
 	int fileDesc;
@@ -49,28 +49,28 @@ typedef struct{
 	PF_FileSubHeader *pFileSubHeader;
 }PF_FileHandle;
 
-typedef struct{
+typedef struct {
 	int nReads;
 	int nWrites;
 	Frame frame[PF_BUFFER_SIZE];
 	bool allocated[PF_BUFFER_SIZE];
 }BF_Manager;
 
-typedef struct{
+typedef struct {
 	bool bOpen;
 	Frame *pFrame;
 }PF_PageHandle;
 
 const RC CreateFile(const char *fileName);
-const RC openFile(char *fileName,PF_FileHandle *fileHandle);
+const RC openFile(char *fileName, PF_FileHandle *fileHandle);
 const RC CloseFile(PF_FileHandle *fileHandle);
 
-const RC GetThisPage(PF_FileHandle *fileHandle,PageNum pageNum,PF_PageHandle *pageHandle);
-const RC AllocatePage(PF_FileHandle *fileHandle,PF_PageHandle *pageHandle);
-const RC GetPageNum(PF_PageHandle *pageHandle,PageNum *pageNum);
+const RC GetThisPage(PF_FileHandle *fileHandle, PageNum pageNum, PF_PageHandle *pageHandle);
+const RC AllocatePage(PF_FileHandle *fileHandle, PF_PageHandle *pageHandle);
+const RC GetPageNum(PF_PageHandle *pageHandle, PageNum *pageNum);
 
-const RC GetData(PF_PageHandle *pageHandle,char **pData);
-const RC DisposePage(PF_FileHandle *fileHandle,PageNum pageNum);
+const RC GetData(PF_PageHandle *pageHandle, char **pData);
+const RC DisposePage(PF_FileHandle *fileHandle, PageNum pageNum);
 
 const RC MarkDirty(PF_PageHandle *pageHandle);
 

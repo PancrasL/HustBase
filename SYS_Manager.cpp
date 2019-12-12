@@ -190,7 +190,6 @@ RC CloseDB() {
 1.系统表文件和系统列文件的初始化
 2.创建数据表文件
 */
-//done
 RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	RC rc;
 	char  *pData;
@@ -265,9 +264,11 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	return SUCCESS;
 }
 
-//删表操作
-//1.把表名为relName的表删除 
-//2.将数据库中该表对应的信息置空
+/*
+删表操作
+1.把表名为relName的表删除
+2.将数据库中该表对应的信息置空
+*/
 RC DropTable(char *relName) {
 	CFile tmp;
 	RM_FileHandle *rm_table, *rm_column;

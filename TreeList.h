@@ -16,30 +16,30 @@ protected:
 	CTreeList();           // protected constructor used by dynamic creation
 	DECLARE_DYNCREATE(CTreeList)
 
-// Attributes
+	// Attributes
 public:
 	CHustBaseDoc* GetDocument();
-//	CString path;
-// Operations
+	//	CString path;
+	// Operations
 public:
 	bool PathFlag;
 
 public:
-	
+
 	static bool openorNot;//=false;
 	void PopulateTree();
-//	BOOL LocateAndInsert(const CAnimalInfo &, const POSITION);
-//µÈ´ý
+	//	BOOL LocateAndInsert(const CAnimalInfo &, const POSITION);
+	//µÈ´ý
 	void DeleteSelection();
 	void EditSelection();
 	void ModifySelection();
 
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CTreeList)
-	public:
+	// Overrides
+		// ClassWizard generated virtual function overrides
+		//{{AFX_VIRTUAL(CTreeList)
+public:
 	virtual void OnInitialUpdate();
-	protected:
+protected:
 	virtual void OnDraw(CDC* pDC);      // overridden to draw this view
 	virtual void OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint);
 	//}}AFX_VIRTUAL
@@ -60,24 +60,26 @@ protected:
 	afx_msg void OnSelchanged(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg int OnCreate(LPCREATESTRUCT lpcs);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
-//	afx_msg void OnOpenDB();
-	//}}AFX_MSG
+	//	afx_msg void OnOpenDB();
+		//}}AFX_MSG
 
-//	HTREEITEM FindNode(const HTREEITEM, const CString &) const;
-//	HTREEITEM InsertNode(const HTREEITEM, const CString &str, const DWORD);
-// 	void ModifyTable(const HTREEITEM selectedNode, const DWORD itemData);
-// 	void ModifyType(const HTREEITEM selectedNode, const DWORD itemData);
-	
+	//	HTREEITEM FindNode(const HTREEITEM, const CString &) const;
+	//	HTREEITEM InsertNode(const HTREEITEM, const CString &str, const DWORD);
+	// 	void ModifyTable(const HTREEITEM selectedNode, const DWORD itemData);
+	// 	void ModifyType(const HTREEITEM selectedNode, const DWORD itemData);
+
 	DECLARE_MESSAGE_MAP()
 
 
 private:
-		CBitmap bm;
+	CBitmap bm;
 };
 
 #ifndef _DEBUG  // debug version in TreeView.cpp
 inline CHustBaseDoc* CTreeList::GetDocument()
-{ return (CHustBaseDoc*)m_pDocument; }
+{
+	return (CHustBaseDoc*)m_pDocument;
+}
 #endif
 /////////////////////////////////////////////////////////////////////////////
 

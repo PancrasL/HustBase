@@ -1,6 +1,6 @@
 #ifndef RC_HH
 #define RC_HH
-typedef enum{
+typedef enum {
 	SUCCESS,
 	SQL_SYNTAX,
 	PF_EXIST,

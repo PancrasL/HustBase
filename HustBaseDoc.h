@@ -19,25 +19,25 @@ protected: // create from serialization only
 	CHustBaseDoc();
 	DECLARE_DYNCREATE(CHustBaseDoc)
 
-// Attributes
+	// Attributes
 public:
 	CString get_text;
 	char *Info[5];
-	int infoCount; 
+	int infoCount;
 
 	char selResult[101][20][20];
 	int selRowNum;
 	int selColNum;
-//bool isEdit;
-static	bool isEdit;
-// Operations
+	//bool isEdit;
+	static	bool isEdit;
+	// Operations
 public:
-	POSITION InsertData ();
+	POSITION InsertData();
 	static CHustBaseDoc * GetDoc();
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CHustBaseDoc)
-	public:
+	// Overrides
+		// ClassWizard generated virtual function overrides
+		//{{AFX_VIRTUAL(CHustBaseDoc)
+public:
 	virtual BOOL OnNewDocument();
 	virtual void Serialize(CArchive& ar);
 	virtual void DeleteContents();
@@ -50,15 +50,15 @@ public:
 	CTreeList * m_pTreeView;
 	CEditArea * m_pEditView;
 
-//	CList <CTableInfo, CTableInfo&> m_TableList;
+	//	CList <CTableInfo, CTableInfo&> m_TableList;
 	virtual ~CHustBaseDoc();
 #ifdef _DEBUG
 	virtual void AssertValid() const;
 	virtual void Dump(CDumpContext& dc) const;
 #endif
-	
+
 protected:
-	
+
 	// Generated message map functions
 protected:
 	//{{AFX_MSG(CHustBaseDoc)

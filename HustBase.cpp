@@ -54,7 +54,7 @@ CHustBaseApp theApp;
 
 /////////////////////////////////////////////////////////////////////////////
 // CHustBaseApp initialization
-bool CHustBaseApp::pathvalue=false;
+bool CHustBaseApp::pathvalue = false;
 
 BOOL CHustBaseApp::InitInstance()
 {
@@ -113,14 +113,14 @@ class CAboutDlg : public CDialog
 public:
 	CAboutDlg();
 
-// Dialog Data
-	//{{AFX_DATA(CAboutDlg)
+	// Dialog Data
+		//{{AFX_DATA(CAboutDlg)
 	enum { IDD = IDD_ABOUTBOX };
 	//}}AFX_DATA
 
 	// ClassWizard generated virtual function overrides
 	//{{AFX_VIRTUAL(CAboutDlg)
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
 	//}}AFX_VIRTUAL
 
@@ -195,7 +195,7 @@ void CHustBaseApp::OnCreateDB()
 	}
 }
 
-void CHustBaseApp::OnOpenDB() 
+void CHustBaseApp::OnOpenDB()
 {
 	//关联打开数据库按钮，此处应提示用户输入数据库所在位置，并调用OpenDB函数改变当前数据库路径，并在界面左侧的控件中显示数据库中的表、列信息。
 	LPITEMIDLIST rootLoation;
@@ -230,7 +230,7 @@ void CHustBaseApp::OnOpenDB()
 	}
 }
 
-void CHustBaseApp::OnDropDb() 
+void CHustBaseApp::OnDropDb()
 {
 	//关联删除数据库按钮，此处应提示用户输入数据库所在位置，并调用DropDB函数删除数据库的内容。
 	LPITEMIDLIST rootLoation;

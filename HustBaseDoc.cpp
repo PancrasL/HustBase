@@ -41,13 +41,13 @@ CHustBaseDoc::CHustBaseDoc()
 CHustBaseDoc::~CHustBaseDoc()
 {
 }
-bool CHustBaseDoc::isEdit=false;
+bool CHustBaseDoc::isEdit = false;
 POSITION CHustBaseDoc::InsertData()
 {
- 	POSITION pos;//=NULL; //µÈ´ý
- 
- 	SetModifiedFlag();
- 	return pos ;
+	POSITION pos;//=NULL; //µÈ´ý
+
+	SetModifiedFlag();
+	return pos;
 }
 //extern CHustBaseApp theApp;
 BOOL CHustBaseDoc::OnNewDocument()
@@ -60,17 +60,17 @@ BOOL CHustBaseDoc::OnNewDocument()
 	if (CHustBaseApp::pathvalue)
 	{
 		m_pTreeView->PopulateTree();
-		
+
 	}
-	
-	
+
+
 	return TRUE;
 }
 
 CHustBaseDoc * CHustBaseDoc::GetDoc()
 {
-      CFrameWnd * pFrame = (CFrameWnd *)(AfxGetApp()->m_pMainWnd);
-      return (CHustBaseDoc *) pFrame->GetActiveDocument();
+	CFrameWnd * pFrame = (CFrameWnd *)(AfxGetApp()->m_pMainWnd);
+	return (CHustBaseDoc *)pFrame->GetActiveDocument();
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -106,14 +106,14 @@ void CHustBaseDoc::Dump(CDumpContext& dc) const
 /////////////////////////////////////////////////////////////////////////////
 // CHustBaseDoc commands
 
-void CHustBaseDoc::DeleteContents() 
+void CHustBaseDoc::DeleteContents()
 {
 	// TODO: Add your specialized code here and/or call the base class
-	
+
 	CDocument::DeleteContents();
 }
 
-BOOL CHustBaseDoc::OnOpenDocument(LPCTSTR lpszPathName) 
+BOOL CHustBaseDoc::OnOpenDocument(LPCTSTR lpszPathName)
 {
 	if (!CDocument::OnOpenDocument(lpszPathName))
 		return FALSE;
@@ -122,9 +122,9 @@ BOOL CHustBaseDoc::OnOpenDocument(LPCTSTR lpszPathName)
 	{
 		m_pTreeView->PopulateTree();
 	}
-	
+
 
 	// TODO: Add your specialized creation code here
-	
+
 	return TRUE;
 }

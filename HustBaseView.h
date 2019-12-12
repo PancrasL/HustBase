@@ -20,20 +20,20 @@ public: // create from serialization only
 	virtual ~CHustBaseView();
 	DECLARE_DYNCREATE(CHustBaseView)
 
-// Attributes
+	// Attributes
 public:
 	CHustBaseDoc* GetDocument();
-// Operations
+	// Operations
 public:
 
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CHustBaseView)
-	public:
+	// Overrides
+		// ClassWizard generated virtual function overrides
+		//{{AFX_VIRTUAL(CHustBaseView)
+public:
 	virtual void OnDraw(CDC* pDC);  // overridden to draw this view
 	virtual BOOL PreCreateWindow(CREATESTRUCT& cs);
 	virtual void OnInitialUpdate();
-	protected:
+protected:
 	virtual BOOL OnPreparePrinting(CPrintInfo* pInfo);
 	virtual void OnBeginPrinting(CDC* pDC, CPrintInfo* pInfo);
 	virtual void OnEndPrinting(CDC* pDC, CPrintInfo* pInfo);
@@ -51,7 +51,7 @@ public:
 
 protected:
 
-// Generated message map functions
+	// Generated message map functions
 protected:
 
 	//{{AFX_MSG(CHustBaseView)
@@ -62,7 +62,9 @@ protected:
 
 #ifndef _DEBUG  // debug version in HustBaseView.cpp
 inline CHustBaseDoc* CHustBaseView::GetDocument()
-   { return (CHustBaseDoc*)m_pDocument; }
+{
+	return (CHustBaseDoc*)m_pDocument;
+}
 #endif
 
 /////////////////////////////////////////////////////////////////////////////

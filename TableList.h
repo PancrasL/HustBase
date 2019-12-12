@@ -16,22 +16,22 @@ protected:
 	CTableList();           // protected constructor used by dynamic creation
 	DECLARE_DYNCREATE(CTableList)
 
-// Attributes
+	// Attributes
 public:
 
-// Operations
+	// Operations
 public:
 	void displayTabInfo(CString ParentNode);
-//	void DispTable(const HTREEITEM);
+	//	void DispTable(const HTREEITEM);
 	CHustBaseDoc* GetDocument();
 	void ClearList();
 
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CTableList)
-	public:
+	// Overrides
+		// ClassWizard generated virtual function overrides
+		//{{AFX_VIRTUAL(CTableList)
+public:
 	virtual void OnInitialUpdate();
-	protected:
+protected:
 	virtual void OnDraw(CDC* pDC);      // overridden to draw this view
 	virtual void CalcWindowRect(LPRECT lpClientRect, UINT nAdjustType = adjustBorder);
 	//}}AFX_VIRTUAL
@@ -53,7 +53,9 @@ protected:
 };
 #ifndef _DEBUG  // debug version in SimpleTreeView.cpp
 inline CHustBaseDoc* CTableList::GetDocument()
-{ return (CHustBaseDoc*)m_pDocument; }
+{
+	return (CHustBaseDoc*)m_pDocument;
+}
 #endif
 /////////////////////////////////////////////////////////////////////////////
 

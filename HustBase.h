@@ -9,7 +9,7 @@
 #endif // _MSC_VER > 1000
 
 #ifndef __AFXWIN_H__
-	#error include 'stdafx.h' before including this file for PCH
+#error include 'stdafx.h' before including this file for PCH
 #endif
 
 #include "resource.h"       // main symbols
@@ -22,20 +22,20 @@
 class CHustBaseApp : public CWinApp
 {
 public:
-	
+
 	static bool pathvalue;
 	CHustBaseApp();
 
-// Overrides
-	// ClassWizard generated virtual function overrides
-	//{{AFX_VIRTUAL(CHustBaseApp)
-	public:
+	// Overrides
+		// ClassWizard generated virtual function overrides
+		//{{AFX_VIRTUAL(CHustBaseApp)
+public:
 	virtual BOOL InitInstance();
-//	CString path;
-	//}}AFX_VIRTUAL
+	//	CString path;
+		//}}AFX_VIRTUAL
 
-// Implementation
-	//{{AFX_MSG(CHustBaseApp)
+	// Implementation
+		//{{AFX_MSG(CHustBaseApp)
 	afx_msg void OnAppAbout();
 	afx_msg void OnCreateDB();
 	afx_msg void OnOpenDB();

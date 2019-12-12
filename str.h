@@ -14,9 +14,9 @@
 #include<string.h>
 
 //属性结构体
-typedef struct  {
-  char *relName;     // relation name (may be NULL) 表名
-  char *attrName;    // attribute name              属性名
+typedef struct {
+	char *relName;     // relation name (may be NULL) 表名
+	char *attrName;    // attribute name              属性名
 }RelAttr;
 
 typedef enum {
@@ -31,27 +31,27 @@ typedef enum {
 
 //属性值类型
 typedef enum {
-		chars,
-		ints,
-		floats
+	chars,
+	ints,
+	floats
 }AttrType;
 //属性值
 typedef struct _Value Value;
-struct _Value{
+struct _Value {
 	AttrType type;     // type of value               
 	void     *data;    // value    
 };
 
 typedef struct  _Condition Condition;
-struct  _Condition{
-  int     bLhsIsAttr;   // TRUE if left-hand side is an attribute 1时，操作符右边是属性，0时，是属性值
-  Value   lhsValue;		// left-hand side value if bLhsIsAttr = FALSE 
-  RelAttr lhsAttr;      // left-hand side attribute                     
-  CompOp  op;           // comparison operator                          
-  int     bRhsIsAttr;   // TRUE if right-hand side is an attribute 1时，操作符右边是属性，0时，是属性值
-                        //   and not a value
-  RelAttr rhsAttr;      // right-hand side attribute if bRhsIsAttr = TRUE 右边的属性
-  Value   rhsValue;     // right-hand side value if bRhsIsAttr = FALSE 
+struct  _Condition {
+	int     bLhsIsAttr;   // TRUE if left-hand side is an attribute 1时，操作符右边是属性，0时，是属性值
+	Value   lhsValue;		// left-hand side value if bLhsIsAttr = FALSE 
+	RelAttr lhsAttr;      // left-hand side attribute                     
+	CompOp  op;           // comparison operator                          
+	int     bRhsIsAttr;   // TRUE if right-hand side is an attribute 1时，操作符右边是属性，0时，是属性值
+						  //   and not a value
+	RelAttr rhsAttr;      // right-hand side attribute if bRhsIsAttr = TRUE 右边的属性
+	Value   rhsValue;     // right-hand side value if bRhsIsAttr = FALSE 
 
 };
 
@@ -76,7 +76,7 @@ typedef struct {
 typedef struct {
 	char *relName;										//Relation to delete from
 	int nConditions;									//Length of conditions in Where clause 
-	  Condition conditions[MAX_NUM];	//conditions in Where clause
+	Condition conditions[MAX_NUM];	//conditions in Where clause
 }deletes;
 
 //struct of update 
@@ -85,12 +85,12 @@ typedef struct {
 	char *attrName;					//Attribute to update
 	Value value;						//update value
 	int nConditions;				//Length of conditions in Where clause 
-	 Condition conditions[MAX_NUM];	// conditions in Where clause
+	Condition conditions[MAX_NUM];	// conditions in Where clause
 }updates;
 
 //struct of AttrInfo  
 typedef struct _AttrInfo AttrInfo;
-struct _AttrInfo{
+struct _AttrInfo {
 	char *attrName;		//Attribute name
 	AttrType attrType;		//Type of attribute
 	int attrLength;		//Length of attribute
@@ -121,23 +121,23 @@ typedef struct {
 }dropIndex;
 
 //union of sql_structs
-union sqls{
-	 selects sel;
-	 inserts ins;
-	 deletes del;
-	 updates upd;
-	 createTable cret;
-	 dropTable drt;
-	 createIndex crei;
-	 dropIndex dri;
-	 char *errors;
+union sqls {
+	selects sel;
+	inserts ins;
+	deletes del;
+	updates upd;
+	createTable cret;
+	dropTable drt;
+	createIndex crei;
+	dropIndex dri;
+	char *errors;
 };
 
 
 // struct of flag and sql_struct
 typedef struct {
 	int flag;	/*match to the sqls 0--error;1--select;2--insert;3--update;4--delete;5--create table;6--drop table;7--create index;8--drop index;9--help;10--exit;*/
- 	union sqls sstr;
+	union sqls sstr;
 }sqlstr;
 
 //系统表结构体
@@ -196,9 +196,9 @@ typedef enum {
 }RC;
 #endif
 #ifdef __cplusplus
-extern "C"{
+extern "C" {
 	sqlstr * get_sqlstr();
-	RC parse(char* st,sqlstr* sqln);
+	RC parse(char* st, sqlstr* sqln);
 };
 #endif
 #endif

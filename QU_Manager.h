@@ -2,7 +2,7 @@
 #define __QUERY_MANAGER_H_
 #include "str.h"
 
-typedef struct SelResult{
+typedef struct SelResult {
 	int col_num;
 	int row_num;
 	AttrType type[20];	//结果集各字段的数据类型
@@ -15,7 +15,7 @@ typedef struct SelResult{
 void Init_Result(SelResult * res);
 void Destory_Result(SelResult * res);
 
-RC Query(char * sql,SelResult * res);
+RC Query(char * sql, SelResult * res);
 
-RC Select(int nSelAttrs,RelAttr **selAttrs,int nRelations,char **relations,int nConditions,Condition *conditions,SelResult * res);
+RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res);
 #endif
