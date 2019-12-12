@@ -4,9 +4,9 @@
 #include "QU_Manager.h"
 #include <iostream>
 
-void ExecuteAndMessage(char * sql,CEditArea* editArea){//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½çÃæÉÏÏÔÊ¾Ö´ĞĞ½á¹û¡£´Ëº¯ÊıĞèĞŞ¸Ä
+void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½çÃæÉÏÏÔÊ¾Ö´ĞĞ½á¹û¡£´Ëº¯ÊıĞèĞŞ¸Ä
 	std::string s_sql = sql;
-	if(s_sql.find("select") == 0){
+	if (s_sql.find("select") == 0) {
 		SelResult res;
 		Init_Result(&res);
 		//rc = Query(sql,&res);
@@ -15,26 +15,26 @@ void ExecuteAndMessage(char * sql,CEditArea* editArea){//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½çÃ
 		int col_num = 5;
 		int row_num = 3;
 		char ** fields = new char *[5];
-		for(int i = 0;i<col_num;i++){
+		for (int i = 0; i < col_num; i++) {
 			fields[i] = new char[20];
-			memset(fields[i],0,20);
+			memset(fields[i], 0, 20);
 			fields[i][0] = 'f';
-			fields[i][1] = i+'0';
+			fields[i][1] = i + '0';
 		}
 		char *** rows = new char**[row_num];
-		for(int i = 0;i<row_num;i++){
+		for (int i = 0; i < row_num; i++) {
 			rows[i] = new char*[col_num];
-			for(int j = 0;j<col_num;j++){
+			for (int j = 0; j < col_num; j++) {
 				rows[i][j] = new char[20];
-				memset(rows[i][j],0,20);
+				memset(rows[i][j], 0, 20);
 				rows[i][j][0] = 'r';
 				rows[i][j][1] = i + '0';
 				rows[i][j][2] = '+';
 				rows[i][j][3] = j + '0';
 			}
 		}
-		editArea->ShowSelResult(col_num,row_num,fields,rows);
-		for(int i = 0;i<5;i++){
+		editArea->ShowSelResult(col_num, row_num, fields, rows);
+		for (int i = 0; i < 5; i++) {
 			delete[] fields[i];
 		}
 		delete[] fields;
@@ -44,37 +44,37 @@ void ExecuteAndMessage(char * sql,CEditArea* editArea){//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½çÃ
 	RC rc = execute(sql);
 	int row_num = 0;
 	char**messages;
-	switch(rc){
+	switch (rc) {
 	case SUCCESS:
 		row_num = 1;
 		messages = new char*[row_num];
 		messages[0] = "²Ù×÷³É¹¦";
-		editArea->ShowMessage(row_num,messages);
+		editArea->ShowMessage(row_num, messages);
 		delete[] messages;
 		break;
 	case SQL_SYNTAX:
 		row_num = 1;
 		messages = new char*[row_num];
 		messages[0] = "ÓĞÓï·¨´íÎó";
-		editArea->ShowMessage(row_num,messages);
+		editArea->ShowMessage(row_num, messages);
 		delete[] messages;
 		break;
 	default:
 		row_num = 1;
 		messages = new char*[row_num];
 		messages[0] = "¹¦ÄÜÎ´ÊµÏÖ";
-		editArea->ShowMessage(row_num,messages);
-	delete[] messages;
+		editArea->ShowMessage(row_num, messages);
+		delete[] messages;
 		break;
 	}
 }
 
-RC execute(char * sql){
+RC execute(char * sql) {
 	sqlstr *sql_str = NULL;
 	RC rc;
 	sql_str = get_sqlstr();
-  	rc = parse(sql, sql_str);//Ö»ÓĞÁ½ÖÖ·µ»Ø½á¹ûSUCCESSºÍSQL_SYNTAX
-	
+	rc = parse(sql, sql_str);//Ö»ÓĞÁ½ÖÖ·µ»Ø½á¹ûSUCCESSºÍSQL_SYNTAX
+
 	if (rc == SUCCESS)
 	{
 		int i = 0;
@@ -85,48 +85,51 @@ RC execute(char * sql){
 
 			//break;
 
-			case 2:
+		case 2:
 			//ÅĞ¶ÏSQLÓï¾äÎªinsertÓï¾ä
 
-			case 3:	
+		case 3:
 			//ÅĞ¶ÏSQLÓï¾äÎªupdateÓï¾ä
 			break;
 
-			case 4:					
+		case 4:
 			//ÅĞ¶ÏSQLÓï¾äÎªdeleteÓï¾ä
 			break;
 
-			case 5:
+		case 5:
 			//ÅĞ¶ÏSQLÓï¾äÎªcreateTableÓï¾ä
+			CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
 			break;
 
-			case 6:	
+		case 6:
 			//ÅĞ¶ÏSQLÓï¾äÎªdropTableÓï¾ä
+			DropTable(sql_str->sstr.drt.relName);
 			break;
 
-			case 7:
+		case 7:
 			//ÅĞ¶ÏSQLÓï¾äÎªcreateIndexÓï¾ä
 			break;
-	
-			case 8:	
+
+		case 8:
 			//ÅĞ¶ÏSQLÓï¾äÎªdropIndexÓï¾ä
 			break;
-			
-			case 9:
+
+		case 9:
 			//ÅĞ¶ÏÎªhelpÓï¾ä£¬¿ÉÒÔ¸ø³ö°ïÖúÌáÊ¾
 			break;
-		
-			case 10: 
+
+		case 10:
 			//ÅĞ¶ÏÎªexitÓï¾ä£¬¿ÉÒÔÓÉ´Ë½øĞĞÍË³ö²Ù×÷
-			break;		
+			break;
 		}
-	}else{
+	}
+	else {
 		AfxMessageBox(sql_str->sstr.errors);//µ¯³ö¾¯¸æ¿ò£¬sqlÓï¾ä´Ê·¨½âÎö´íÎóĞÅÏ¢
 		return rc;
 	}
 }
 
-RC CreateDB(char *dbpath,char *dbname){
+RC CreateDB(char *dbpath, char *dbname) {
 	//ÉèÖÃµ±Ç°Ä¿Â¼Îªdbpath£¬ÆäÖĞdbPath°üº¬ÓĞdbName£»
 	SetCurrentDirectory(dbpath);
 	RC rc;
@@ -140,7 +143,7 @@ RC CreateDB(char *dbpath,char *dbname){
 	return SUCCESS;
 }
 
-RC DropDB(char *dbname){
+RC DropDB(char *dbname) {
 	CFileFind tempFind;
 	char sTempFileFind[200];
 	sprintf_s(sTempFileFind, "%s\\*.*", dbname);
@@ -174,11 +177,11 @@ RC DropDB(char *dbname){
 	return SUCCESS;
 }
 
-RC OpenDB(char *dbname){
+RC OpenDB(char *dbname) {
 	return SUCCESS;
 }
 
-RC CloseDB(){
+RC CloseDB() {
 	return SUCCESS;
 }
 
@@ -328,7 +331,7 @@ RC DropTable(char *relName) {
 	return SUCCESS;
 }
 
-bool CanButtonClick(){//ĞèÒªÖØĞÂÊµÏÖ
+bool CanButtonClick() {//ĞèÒªÖØĞÂÊµÏÖ
 	//Èç¹ûµ±Ç°ÓĞÊı¾İ¿âÒÑ¾­´ò¿ª
 	return true;
 	//Èç¹ûµ±Ç°Ã»ÓĞÊı¾İ¿â´ò¿ª
