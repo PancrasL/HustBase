@@ -144,6 +144,7 @@ void CTreeList::InsertDBNodes()
 	for (int i = 0; i < tabnum; i++)
 	{
 		hItem = GetTreeCtrl().InsertItem(tabname[i], 1, 1, TVI_ROOT);
+		hCItem = NULL;
 		hCItem = GetTreeCtrl().InsertItem("ап", 3, 3, hItem, hCItem);
 		for (int j = 0; j < colnum[i]; j++)
 		{
