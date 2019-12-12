@@ -332,6 +332,652 @@ RC DropTable(char *relName) {
 	return SUCCESS;
 }
 
+//创建索引：
+//1.创建索引文件
+//2.对系统列中关于索引的两列信息的更新 
+//3.读取索引对应的表中数据，并将这些数据按照b+树形式有序写入索引文件中 
+//4.关闭相关文件
+RC CreateIndex(char *indexName, char *relName, char *attrName) {
+	return SUCCESS;
+}
+
+RC DropIndex(char *indexName) {
+	return SUCCESS;
+}
+
+/*
+函数实现思想：
+通过读取系统表中的表信息及表的属性信息，
+然后根据这些信息向数据表中插入数据，
+插入操作类似createtable中向系统表和系统列的填充表及属性信息的操作
+*/
+//done
+RC Insert(char *relName, int nValues, Value *values) {
+	RM_FileHandle *rm_data, *rm_table, *rm_column;
+	char *value;//读取数据表信息
+	RID *rid;
+	RC rc;
+	SysColumn *column, *ctmp;
+	RM_FileScan FileScan;
+	RM_Record rectab, reccol;
+	int attrcount;//临时 属性数量，属性长度，属性偏移
+
+	//打开数据表,系统表，系统列文件
+	rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_data->bOpen = false;
+	rc = RM_OpenFile(relName, rm_data);
+	if (rc != SUCCESS) {
+		AfxMessageBox("打开数据表文件失败");
+		return rc;
+	}
+	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table->bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", rm_table);
+	if (rc != SUCCESS) {
+		AfxMessageBox("打开系统表文件失败");
+		return rc;
+	}
+	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column->bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	if (rc != SUCCESS) {
+		AfxMessageBox("打开系统列文件失败");
+		return rc;
+	}
+	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	if (rc != SUCCESS) {
+		AfxMessageBox("初始化文件扫描失败");
+		return rc;
+	}
+	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
+	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
+		if (strcmp(relName, rectab.pData) == 0) {
+			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			break;
+		}
+	}
+
+	//判定是否为完全插入，如果不是，返回fail
+	if (attrcount != nValues) {
+		AfxMessageBox("不是全纪录插入！");
+		return FAIL;
+	}
+	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	if (rc != SUCCESS) {
+		AfxMessageBox("初始化数据列文件扫描失败");
+		return rc;
+	}
+	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
+	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
+	column = (SysColumn *)malloc(attrcount * sizeof(SysColumn));
+	ctmp = column;
+	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
+		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
+			for (int i = 0; i < attrcount; i++, ctmp++) {
+				memcpy(ctmp->tabName, reccol.pData, 21);
+				memcpy(ctmp->attrName, reccol.pData + 21, 21);
+				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
+				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
+				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
+				rc = GetNextRec(&FileScan, &reccol);
+				if (rc != SUCCESS)
+					break;
+			}
+			break;
+		}
+	}
+	ctmp = column;
+
+	//向数据表中循环插入记录
+	value = (char *)malloc(rm_data->fileSubHeader->recordSize);
+	values = values + nValues - 1;
+	for (int i = 0; i < nValues; i++, values--, ctmp++) {
+		memcpy(value + ctmp->attrOffset, values->data, ctmp->attrLength);
+	}
+	rid = (RID*)malloc(sizeof(RID));
+	rid->bValid = false;
+	InsertRec(rm_data, value, rid);
+	free(value);
+	free(rid);
+	free(column);
+
+	//关闭文件句柄
+	rc = RM_CloseFile(rm_data);
+	if (rc != SUCCESS) {
+		AfxMessageBox("关闭数据表失败");
+		return rc;
+	}
+	free(rm_data);
+	rc = RM_CloseFile(rm_table);
+	if (rc != SUCCESS) {
+		AfxMessageBox("关闭系统表失败");
+		return rc;
+	}
+	free(rm_table);
+	rc = RM_CloseFile(rm_column);
+	if (rc != SUCCESS) {
+		AfxMessageBox("关闭系统列失败");
+		return rc;
+	}
+	free(rm_column);
+	return SUCCESS;
+}
+
+RC Delete(char *relName, int nConditions, Condition *conditions) {
+	RM_FileHandle *rm_data, *rm_table, *rm_column;
+	RC rc;
+	RM_FileScan FileScan;
+	RM_Record recdata, rectab, reccol;
+	SysColumn *column, *ctmp, *ctmpleft, *ctmpright;
+	Condition *contmp;
+	int i, torf;//是否符合删除条件
+	int attrcount;//临时 属性数量
+	int intleft, intright;
+	char *charleft, *charright;
+	float floatleft, floatright;//临时 属性的值
+	AttrType attrtype;
+
+	//打开数据表,系统表，系统列文件
+	rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_data->bOpen = false;
+	rc = RM_OpenFile(relName, rm_data);
+	if (rc != SUCCESS)
+		return rc;
+	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table->bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", rm_table);
+	if (rc != SUCCESS)
+		return rc;
+	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column->bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	if (rc != SUCCESS)
+		return rc;
+
+	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
+	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
+		if (strcmp(relName, rectab.pData) == 0) {
+			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			break;
+		}
+	}
+
+	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
+	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
+	column = (SysColumn *)malloc(attrcount * sizeof(SysColumn));
+	ctmp = column;
+	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
+		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
+			for (int i = 0; i < attrcount; i++) {
+				memcpy(ctmp->tabName, reccol.pData, 21);
+				memcpy(ctmp->attrName, reccol.pData + 21, 21);
+				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
+				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
+				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
+				ctmp++;
+				rc = GetNextRec(&FileScan, &reccol);
+				if (rc != SUCCESS)
+					break;
+			}
+			break;
+		}
+	}
+
+	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_data, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//循环查找表名为relName对应的数据表中的记录,并将记录信息保存于recdata中
+	while (GetNextRec(&FileScan, &recdata) == SUCCESS) {	//取记录做判断
+		for (i = 0, torf = 1, contmp = conditions; i < nConditions; i++, contmp++) {//conditions条件逐一判断
+			ctmpleft = ctmpright = column;//每次循环都要将遍历整个系统列文件，找到各个条件对应的属性
+			//左属性右值
+			if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 0) {
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->lhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->lhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
+						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpleft++;
+				}
+				//对conditions的某一个条件进行判断
+				switch (ctmpleft->attrType) {//判定属性的类型
+				case ints:
+					attrtype = ints;
+					memcpy(&intleft, recdata.pData + ctmpleft->attrOffset, sizeof(int));
+					memcpy(&intright, contmp->rhsValue.data, sizeof(int));
+					break;
+				case chars:
+					attrtype = chars;
+					charleft = (char *)malloc(ctmpleft->attrLength);
+					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpleft->attrLength);
+					charright = (char *)malloc(ctmpleft->attrLength);
+					memcpy(charright, contmp->rhsValue.data, ctmpleft->attrLength);
+					break;
+				case floats:
+					attrtype = floats;
+					memcpy(&floatleft, recdata.pData + ctmpleft->attrOffset, sizeof(float));
+					memcpy(&floatright, contmp->rhsValue.data, sizeof(float));
+					break;
+				}
+			}
+			//右属性左值
+			if (contmp->bLhsIsAttr == 0 && contmp->bRhsIsAttr == 1) {
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->rhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->rhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
+						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpright++;
+				}
+				//对conditions的某一个条件进行判断
+				switch (ctmpright->attrType) {
+				case ints:
+					attrtype = ints;
+					memcpy(&intleft, contmp->lhsValue.data, sizeof(int));
+					memcpy(&intright, recdata.pData + ctmpright->attrOffset, sizeof(int));
+					break;
+				case chars:
+					attrtype = chars;
+					charleft = (char *)malloc(ctmpright->attrLength);
+					memcpy(charleft, contmp->lhsValue.data, ctmpright->attrLength);
+					charright = (char *)malloc(ctmpright->attrLength);
+					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
+					break;
+				case floats:
+					attrtype = floats;
+					memcpy(&floatleft, contmp->lhsValue.data, sizeof(float));
+					memcpy(&floatright, recdata.pData + ctmpright->attrOffset, sizeof(float));
+					break;
+				}
+			}
+			//左右均属性
+			else  if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 1) {
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->lhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->lhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
+						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpleft++;
+				}
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->rhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->rhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
+						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpright++;
+				}
+				//对conditions的某一个条件进行判断
+				switch (ctmpright->attrType) {
+				case ints:
+					attrtype = ints;
+					memcpy(&intleft, recdata.pData + ctmpleft->attrOffset, sizeof(int));
+					memcpy(&intright, recdata.pData + ctmpright->attrOffset, sizeof(int));
+					break;
+				case chars:
+					attrtype = chars;
+					charleft = (char *)malloc(ctmpright->attrLength);
+					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpright->attrLength);
+					charright = (char *)malloc(ctmpright->attrLength);
+					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
+					break;
+				case floats:
+					attrtype = floats;
+					memcpy(&floatleft, recdata.pData + ctmpleft->attrOffset, sizeof(float));
+					memcpy(&floatright, recdata.pData + ctmpright->attrOffset, sizeof(float));
+					break;
+				}
+			}
+			if (attrtype == ints) {
+				if ((intleft == intright && contmp->op == EQual) ||
+					(intleft > intright && contmp->op == GreatT) ||
+					(intleft >= intright && contmp->op == GEqual) ||
+					(intleft < intright && contmp->op == LessT) ||
+					(intleft <= intright && contmp->op == LEqual) ||
+					(intleft != intright && contmp->op == NEqual))
+					torf &= 1;
+				else
+					torf &= 0;
+			}
+			else if (attrtype == chars) {
+				if ((strcmp(charleft, charright) == 0 && contmp->op == EQual) ||
+					(strcmp(charleft, charright) > 0 && contmp->op == GreatT) ||
+					((strcmp(charleft, charright) > 0 || strcmp(charleft, charright) == 0) && contmp->op == GEqual) ||
+					(strcmp(charleft, charright) < 0 && contmp->op == LessT) ||
+					((strcmp(charleft, charright) < 0 || strcmp(charleft, charright) == 0) && contmp->op == LEqual) ||
+					(strcmp(charleft, charright) != 0 && contmp->op == NEqual))
+					torf &= 1;
+				else
+					torf &= 0;
+				free(charleft);
+				free(charright);
+			}
+			else if (attrtype == floats) {
+				if ((floatleft == floatright && contmp->op == EQual) ||
+					(floatleft > floatright && contmp->op == GreatT) ||
+					(floatleft >= floatright && contmp->op == GEqual) ||
+					(floatleft < floatright && contmp->op == LessT) ||
+					(floatleft <= floatright && contmp->op == LEqual) ||
+					(floatleft != floatright && contmp->op == NEqual))
+					torf &= 1;
+				else
+					torf &= 0;
+			}
+			else
+				torf &= 0;
+		}
+
+		if (torf == 1) {
+			DeleteRec(rm_data, &(recdata.rid));
+		}
+	}
+	free(column);
+
+	//关闭文件句柄
+	rc = RM_CloseFile(rm_table);
+	if (rc != SUCCESS)
+		return rc;
+	free(rm_table);
+	rc = RM_CloseFile(rm_column);
+	if (rc != SUCCESS)
+		return rc;
+	free(rm_column);
+	rc = RM_CloseFile(rm_data);
+	if (rc != SUCCESS)
+		return rc;
+	free(rm_data);
+	return SUCCESS;
+}
+
+RC Update(char *relName, char *attrName, Value *Value, int nConditions, Condition *conditions) {
+	//只能进行单值更新
+	RM_FileHandle *rm_data, *rm_table, *rm_column;
+	RC rc;
+	RM_FileScan FileScan;
+	RM_Record recdata, rectab, reccol;
+	SysColumn *column, *ctmp, *cupdate, *ctmpleft, *ctmpright;
+	Condition *contmp;
+	int i, torf;//是否符合删除条件
+	int attrcount;//临时 属性数量
+	int intleft, intright;
+	char *charleft, *charright;
+	float floatleft, floatright;//临时 属性的值
+	AttrType attrtype;
+
+	//打开数据表,系统表，系统列文件
+	rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_data->bOpen = false;
+	rc = RM_OpenFile(relName, rm_data);
+	if (rc != SUCCESS)
+		return rc;
+	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table->bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", rm_table);
+	if (rc != SUCCESS)
+		return rc;
+	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column->bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	if (rc != SUCCESS)
+		return rc;
+
+	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
+	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
+		if (strcmp(relName, rectab.pData) == 0) {
+			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			break;
+		}
+	}
+
+	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
+	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
+	column = (SysColumn *)malloc(attrcount * sizeof(SysColumn));
+	cupdate = (SysColumn *)malloc(sizeof(SysColumn));
+	ctmp = column;
+	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
+		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
+			for (int i = 0; i < attrcount; i++) {
+				memcpy(ctmp->tabName, reccol.pData, 21);
+				memcpy(ctmp->attrName, reccol.pData + 21, 21);
+				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
+				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
+				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
+				if ((strcmp(relName, ctmp->tabName) == 0) && (strcmp(attrName, ctmp->attrName) == 0)) {
+					cupdate = ctmp;//找到要更新数据 对应的属性
+				}
+				rc = GetNextRec(&FileScan, &reccol);
+				if (rc != SUCCESS)
+					break;
+				ctmp++;
+			}
+			break;
+		}
+	}
+
+	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, rm_data, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//循环查找表名为relName对应的数据表中的记录,并将记录信息保存于recdata中
+	while (GetNextRec(&FileScan, &recdata) == SUCCESS) {
+		for (i = 0, torf = 1, contmp = conditions; i < nConditions; i++, contmp++) {//conditions条件逐一判断
+			ctmpleft = ctmpright = column;//每次循环都要将遍历整个系统列文件，找到各个条件对应的属性
+			//左属性右值
+			if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 0) {
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->lhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->lhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
+						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpleft++;
+				}
+				//对conditions的某一个条件进行判断
+				if (ctmpleft->attrType == ints) {//判定属性的类型
+					attrtype = ints;
+					memcpy(&intleft, recdata.pData + ctmpleft->attrOffset, sizeof(int));
+					memcpy(&intright, contmp->rhsValue.data, sizeof(int));
+				}
+				else if (ctmpleft->attrType == chars) {
+					attrtype = chars;
+					charleft = (char *)malloc(ctmpleft->attrLength);
+					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpleft->attrLength);
+					charright = (char *)malloc(ctmpleft->attrLength);
+					memcpy(charright, contmp->rhsValue.data, ctmpleft->attrLength);
+				}
+				else if (ctmpleft->attrType == floats) {
+					attrtype = floats;
+					memcpy(&floatleft, recdata.pData + ctmpleft->attrOffset, sizeof(float));
+					memcpy(&floatright, contmp->rhsValue.data, sizeof(float));
+				}
+				else
+					torf &= 0;
+			}
+			//右属性左值
+			else  if (contmp->bLhsIsAttr == 0 && contmp->bRhsIsAttr == 1) {
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->rhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->rhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
+						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpright++;
+				}
+				//对conditions的某一个条件进行判断
+				if (ctmpright->attrType == ints) {//判定属性的类型
+					attrtype = ints;
+					memcpy(&intleft, contmp->lhsValue.data, sizeof(int));
+					memcpy(&intright, recdata.pData + ctmpright->attrOffset, sizeof(int));
+				}
+				else if (ctmpright->attrType == chars) {
+					attrtype = chars;
+					charleft = (char *)malloc(ctmpright->attrLength);
+					memcpy(charleft, contmp->lhsValue.data, ctmpright->attrLength);
+					charright = (char *)malloc(ctmpright->attrLength);
+					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
+				}
+				else if (ctmpright->attrType == floats) {
+					attrtype = floats;
+					memcpy(&floatleft, contmp->lhsValue.data, sizeof(float));
+					memcpy(&floatright, recdata.pData + ctmpright->attrOffset, sizeof(float));
+				}
+				else
+					torf &= 0;
+			}
+			//左右均属性
+			else  if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 1) {
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->lhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->lhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
+						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpleft++;
+				}
+				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
+					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
+						contmp->rhsAttr.relName = (char *)malloc(21);
+						strcpy(contmp->rhsAttr.relName, relName);
+					}
+					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
+						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
+						break;
+					}
+					ctmpright++;
+				}
+				//对conditions的某一个条件进行判断
+				if (ctmpright->attrType == ints && ctmpleft->attrType == ints) {//判定属性的类型
+					attrtype = ints;
+					memcpy(&intleft, recdata.pData + ctmpleft->attrOffset, sizeof(int));
+					memcpy(&intright, recdata.pData + ctmpright->attrOffset, sizeof(int));
+				}
+				else if (ctmpright->attrType == chars && ctmpleft->attrType == chars) {
+					attrtype = chars;
+					charleft = (char *)malloc(ctmpright->attrLength);
+					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpright->attrLength);
+					charright = (char *)malloc(ctmpright->attrLength);
+					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
+				}
+				else if (ctmpright->attrType == floats && ctmpleft->attrType == floats) {
+					attrtype = floats;
+					memcpy(&floatleft, recdata.pData + ctmpleft->attrOffset, sizeof(float));
+					memcpy(&floatright, recdata.pData + ctmpright->attrOffset, sizeof(float));
+				}
+				else
+					torf &= 0;
+			}
+			if (attrtype == ints) {
+				if ((intleft == intright && contmp->op == EQual) ||
+					(intleft > intright && contmp->op == GreatT) ||
+					(intleft >= intright && contmp->op == GEqual) ||
+					(intleft < intright && contmp->op == LessT) ||
+					(intleft <= intright && contmp->op == LEqual) ||
+					(intleft != intright && contmp->op == NEqual))
+					torf &= 1;
+				else
+					torf &= 0;
+			}
+			else if (attrtype == chars) {
+				if ((strcmp(charleft, charright) == 0 && contmp->op == EQual) ||
+					(strcmp(charleft, charright) > 0 && contmp->op == GreatT) ||
+					((strcmp(charleft, charright) > 0 || strcmp(charleft, charright) == 0) && contmp->op == GEqual) ||
+					(strcmp(charleft, charright) < 0 && contmp->op == LessT) ||
+					((strcmp(charleft, charright) < 0 || strcmp(charleft, charright) == 0) && contmp->op == LEqual) ||
+					(strcmp(charleft, charright) != 0 && contmp->op == NEqual))
+					torf &= 1;
+				else
+					torf &= 0;
+				free(charleft);
+				free(charright);
+			}
+			else if (attrtype == floats) {
+				if ((floatleft == floatright && contmp->op == EQual) ||
+					(floatleft > floatright && contmp->op == GreatT) ||
+					(floatleft >= floatright && contmp->op == GEqual) ||
+					(floatleft < floatright && contmp->op == LessT) ||
+					(floatleft <= floatright && contmp->op == LEqual) ||
+					(floatleft != floatright && contmp->op == NEqual))
+					torf &= 1;
+				else
+					torf &= 0;
+			}
+			else
+				torf &= 0;
+		}
+		if (torf == 1) {
+			memcpy(recdata.pData + cupdate->attrOffset, Value->data, cupdate->attrLength);
+			UpdateRec(rm_data, &recdata);
+		}
+	}
+
+	free(column);
+	//关闭文件句柄
+	rc = RM_CloseFile(rm_table);
+	if (rc != SUCCESS)
+		return rc;
+	free(rm_table);
+	rc = RM_CloseFile(rm_column);
+	if (rc != SUCCESS)
+		return rc;
+	free(rm_column);
+	rc = RM_CloseFile(rm_data);
+	if (rc != SUCCESS)
+		return rc;
+	free(rm_data);
+	return SUCCESS;
+}
+
 bool CanButtonClick() {//需要重新实现
 	//如果当前有数据库已经打开
 	return true;
