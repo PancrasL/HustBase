@@ -185,7 +185,7 @@ void CHustBaseApp::OnCreateDB()
 	LPITEMIDLIST idl = SHBrowseForFolder(&bi);
 	SHGetPathFromIDList(idl, str.GetBuffer(MAX_PATH * 2));
 	str.ReleaseBuffer();
-	BOOL bRet = CreateDirectory(str, NULL);//创建文件夹
+	CreateDirectory(str, NULL);//创建文件夹
 
 	dbPath = str.GetBuffer(0);
 	dbName = szPathName;
@@ -214,18 +214,9 @@ void CHustBaseApp::OnOpenDB()
 		SHGetPathFromIDList(targetLocation, dbName);
 	}
 
-	SetCurrentDirectory(dbName);
-	int i, j;
-	if ((i = access("SYSTABLES", 0)) != 0 || (j = access("SYSCOLUMNS", 0)) != 0) {
-		AfxMessageBox("打开的不是数据库");
-		return;
-	}
-	CHustBaseApp::pathvalue = true;
-	CHustBaseDoc *pDoc;
-	pDoc = CHustBaseDoc::GetDoc();
-	pDoc->m_pTreeView->PopulateTree();
 	rc = OpenDB(dbName);
-	if (rc != SUCCESS) {
+	if (rc == FAIL) {
+		AfxMessageBox("打开的不是数据库");
 		return;
 	}
 }

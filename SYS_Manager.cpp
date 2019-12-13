@@ -2,10 +2,13 @@
 #include "EditArea.h"
 #include "SYS_Manager.h"
 #include "QU_Manager.h"
+#include "HustBase.h"
+#include "HustBaseDoc.h"
 #include <iostream>
 
 void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾ÝÖ´ÐÐµÄÓï¾äÀàÐÍÔÚ½çÃæÉÏÏÔÊ¾Ö´ÐÐ½á¹û¡£´Ëº¯ÊýÐèÐÞ¸Ä
 	std::string s_sql = sql;
+	//²éÑ¯SQLÓï¾äµÄ´¦Àí
 	if (s_sql.find("select") == 0) {
 		SelResult res;
 		Init_Result(&res);
@@ -41,6 +44,8 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾ÝÖ´ÐÐµÄÓï¾äÀàÐÍÔÚ½
 		Destory_Result(&res);
 		return;
 	}
+	
+	//ÆäËûSQLÓï¾äµÄ´¦Àí
 	RC rc = execute(sql);
 	int row_num = 0;
 	char**messages;
@@ -98,12 +103,12 @@ RC execute(char * sql) {
 
 		case 5:
 			//ÅÐ¶ÏSQLÓï¾äÎªcreateTableÓï¾ä
-			CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
+			rc = CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
 			break;
 
 		case 6:
 			//ÅÐ¶ÏSQLÓï¾äÎªdropTableÓï¾ä
-			DropTable(sql_str->sstr.drt.relName);
+			rc = DropTable(sql_str->sstr.drt.relName);
 			break;
 
 		case 7:
@@ -122,6 +127,7 @@ RC execute(char * sql) {
 			//ÅÐ¶ÏÎªexitÓï¾ä£¬¿ÉÒÔÓÉ´Ë½øÐÐÍË³ö²Ù×÷
 			break;
 		}
+		return rc;
 	}
 	else {
 		AfxMessageBox(sql_str->sstr.errors);//µ¯³ö¾¯¸æ¿ò£¬sqlÓï¾ä´Ê·¨½âÎö´íÎóÐÅÏ¢
@@ -130,10 +136,15 @@ RC execute(char * sql) {
 }
 
 RC CreateDB(char *dbpath, char *dbname) {
-	//ÉèÖÃµ±Ç°Ä¿Â¼Îªdbpath£¬ÆäÖÐdbPath°üº¬ÓÐdbName£»
-	SetCurrentDirectory(dbpath);
+	//ÔÚdbpathÏÂ´´½¨dbnameÎÄ¼þ¼Ð
+	CString path = dbpath;
+	path += "\\";
+	path += dbname;
+	CreateDirectory(path, NULL);
+
+	//ÔÚdbnameÎÄ¼þ¼ÐÏÂ´´½¨±íÎÄ¼þºÍÁÐÎÄ¼þ
+	SetCurrentDirectory(path);
 	RC rc;
-	//´´½¨ÏµÍ³±íÎÄ¼þºÍÏµÍ³ÁÐÎÄ¼þ
 	rc = RM_CreateFile("SYSTABLES", sizeof(SysTable));
 	if (rc != SUCCESS)
 		return rc;
@@ -178,10 +189,20 @@ RC DropDB(char *dbname) {
 }
 
 RC OpenDB(char *dbname) {
+	SetCurrentDirectory(dbname);
+	int i, j;
+	if ((i = access("SYSTABLES", 0)) != 0 || (j = access("SYSCOLUMNS", 0)) != 0) {
+		return FAIL;
+	}
+	CHustBaseApp::pathvalue = true;
+	CHustBaseDoc *pDoc;
+	pDoc = CHustBaseDoc::GetDoc();
+	pDoc->m_pTreeView->PopulateTree();
 	return SUCCESS;
 }
 
 RC CloseDB() {
+	
 	return SUCCESS;
 }
 
