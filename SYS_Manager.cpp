@@ -306,11 +306,11 @@ RC DropTable(char *relName) {
 	RM_Record rectab, reccol;
 	int attrcount;//临时 属性数量，属性长度，属性偏移
 
-	//删除数据表文件
+	/*删除数据表文件*/
 	tmp.Remove((LPCTSTR)relName);
 
-	//将系统表和系统列中对应表的相关记录删除
-	//打开系统表，系统列文件
+	/*将系统表和系统列中对应表的相关记录删除*/
+	//打开表文件和列文件
 	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
@@ -327,6 +327,7 @@ RC DropTable(char *relName) {
 	rc = OpenScan(&FileScan, rm_table, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
+
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
@@ -335,6 +336,7 @@ RC DropTable(char *relName) {
 			break;
 		}
 	}
+
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
 	FileScan.bOpen = false;
 	rc = OpenScan(&FileScan, rm_column, 0, NULL);
