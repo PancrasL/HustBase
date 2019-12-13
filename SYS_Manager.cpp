@@ -75,6 +75,9 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½
 }
 
 RC execute(char * sql) {
+	CHustBaseDoc *pDoc;
+	pDoc = CHustBaseDoc::GetDoc();
+
 	sqlstr *sql_str = NULL;
 	RC rc;
 	sql_str = get_sqlstr();
@@ -104,6 +107,7 @@ RC execute(char * sql) {
 		case 5:
 			//ÅĞ¶ÏSQLÓï¾äÎªcreateTableÓï¾ä
 			rc = CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
+			pDoc->m_pTreeView->PopulateTree();
 			break;
 
 		case 6:
@@ -219,7 +223,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	int recordsize;//Êı¾İ±íµÄÃ¿Ìõ¼ÇÂ¼µÄ´óĞ¡
 	AttrInfo * attrtmp = attributes;
 
-	//´ò¿ªÏµÍ³±íÎÄ¼şºÍÏµÍ³ÁĞÎÄ¼ş
+	/*´ò¿ªÏµÍ³±íÎÄ¼şºÍÏµÍ³ÁĞÎÄ¼ş*/
 	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
@@ -231,7 +235,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	if (rc != SUCCESS)
 		return rc;
 
-	//¸üĞÂÏµÍ³±íÎÄ¼ş 
+	/*¸üĞÂÏµÍ³±íÎÄ¼ş*/
 	pData = (char *)malloc(sizeof(SysTable));
 	memcpy(pData, relName, 21);
 	memcpy(pData + 21, &attrCount, sizeof(int));
@@ -245,11 +249,12 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	if (rc != SUCCESS) {
 		return rc;
 	}
+	//ÊÍ·ÅÉêÇëµÄÄÚ´æ¿Õ¼ä
 	free(rm_table);
 	free(pData);
-	free(rid);//ÊÍ·ÅÉêÇëµÄÄÚ´æ¿Õ¼ä
+	free(rid);
 
-	//¸üĞÂÏµÍ³ÁĞÎÄ¼ş£¬Ò»¸ö±íÖĞ°üº¬¶à¸öÊôĞÔÁĞ
+	/*¸üĞÂÏµÍ³ÁĞÎÄ¼ş£¬Ò»¸ö±íÖĞ°üº¬¶à¸öÊôĞÔÁĞ*/
 	for (int i = 0, offset = 0; i < attrCount; i++, attrtmp++) {
 		pData = (char *)malloc(sizeof(SysColumn));
 		memcpy(pData, relName, 21);
@@ -273,7 +278,9 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 		return rc;
 	}
 	free(rm_column);
-	//´´½¨Êı¾İ±í
+
+	/*´´½¨Êı¾İ±í*/
+
 	//¼ÆËãrecordsizeµÄ´óĞ¡
 	recordsize = 0;
 	attrtmp = attributes;
