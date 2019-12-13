@@ -231,7 +231,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	if (rc != SUCCESS)
 		return rc;
 
-	//更新系统表文件
+	//更新系统表文件 
 	pData = (char *)malloc(sizeof(SysTable));
 	memcpy(pData, relName, 21);
 	memcpy(pData + 21, &attrCount, sizeof(int));
