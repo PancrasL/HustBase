@@ -208,7 +208,7 @@ RC CloseDB() {
 
 /*
 建表操作：
-1.系统表文件和系统列文件的初始化
+1.初始化系统表文件和系统列文件
 2.创建数据表文件
 */
 RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
@@ -230,10 +230,11 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	//向系统表中填充信息
+
+	//更新系统表文件
 	pData = (char *)malloc(sizeof(SysTable));
-	memcpy(pData, relName, 21);//填充表名
-	memcpy(pData + 21, &attrCount, sizeof(int));//填充属性列数
+	memcpy(pData, relName, 21);
+	memcpy(pData + 21, &attrCount, sizeof(int));
 	rid = (RID *)malloc(sizeof(RID));
 	rid->bValid = false;
 	rc = InsertRec(rm_table, pData, rid);
@@ -248,7 +249,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	free(pData);
 	free(rid);//释放申请的内存空间
 
-	//向系统列中循环填充信息 一个表中包含多个属性列，就需要循环
+	//更新系统列文件，一个表中包含多个属性列
 	for (int i = 0, offset = 0; i < attrCount; i++, attrtmp++) {
 		pData = (char *)malloc(sizeof(SysColumn));
 		memcpy(pData, relName, 21);

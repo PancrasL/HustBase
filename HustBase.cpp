@@ -163,35 +163,21 @@ void CHustBaseApp::OnAppAbout()
 
 void CHustBaseApp::OnCreateDB()
 {
-	//关联创建数据库按钮，此处应提示用户输入数据库的存储路径和名称，并调用CreateDB函数创建数据库。
-	LPITEMIDLIST rootLoation;
-	BROWSEINFO bi;
-	char szPathName[MAX_PATH];
-	char szTitle[] = "选择路径";
-	CString str;
-	char *dbPath, *dbName;
-	RC rc;
-
-	SHGetSpecialFolderLocation(NULL, CSIDL_DESKTOP, &rootLoation);
-	if (rootLoation == NULL) {
-		return;
-	}
-	ZeroMemory(&bi, sizeof(BROWSEINFO));
-	bi.pszDisplayName = szPathName;
-	bi.lpszTitle = szTitle;
-	bi.ulFlags = 0x0040;
-	bi.pidlRoot = rootLoation; // 文件夹对话框之根目录，默认是桌面
-
-	LPITEMIDLIST idl = SHBrowseForFolder(&bi);
-	SHGetPathFromIDList(idl, str.GetBuffer(MAX_PATH * 2));
-	str.ReleaseBuffer();
-	CreateDirectory(str, NULL);//创建文件夹
-
-	dbPath = str.GetBuffer(0);
-	dbName = szPathName;
-	rc = CreateDB(dbPath, dbName);
-	if (rc != SUCCESS) {
-		return;
+	CFileDialog dialog(TRUE);
+	dialog.m_ofn.lpstrTitle = "请选择数据库的位置,并在对话框中输入数据库名";
+	if (dialog.DoModal() == IDOK)
+	{
+		CString filePath, fileName, actualFilePath;
+		filePath = dialog.GetPathName();
+		fileName = dialog.GetFileTitle();
+		int actualPathLength = filePath.GetLength() - fileName.GetLength() - 1; //减1是为了去掉‘/’
+		actualFilePath = filePath.Left(actualPathLength);  //获得不包含即将创建的表文件夹的文件夹地址
+		//将CString类型数据转换为char*类型输入
+		char *filePathC = (char *)malloc(filePath.GetLength() + 1);
+		strcpy(filePathC, actualFilePath);
+		char *fileNameC = (char *)malloc(fileName.GetLength() + 1);
+		strcpy(fileNameC, fileName);
+		CreateDB(filePathC, fileNameC);
 	}
 }
 
