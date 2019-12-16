@@ -998,7 +998,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 
 bool CanButtonClick() {//需要重新实现
 	//如果当前有数据库已经打开
-	return false;
+	return true;
 	//如果当前没有数据库打开
 	//return false;
 }
