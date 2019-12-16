@@ -159,37 +159,28 @@ RC CreateDB(char *dbpath, char *dbname) {
 }
 
 RC DropDB(char *dbname) {
-	CFileFind tempFind;
-	char sTempFileFind[200];
-	sprintf_s(sTempFileFind, "%s\\*.*", dbname);
-	BOOL IsFinded = tempFind.FindFile(sTempFileFind);
-	while (IsFinded)
+	BOOL ret = TRUE;
+	CFileFind finder;
+	CString path;
+	path.Format(_T("%s/*"), dbname);
+	BOOL bWorking = finder.FindFile(path);
+	while (bWorking)
 	{
-		IsFinded = tempFind.FindNextFile();
-		if (!tempFind.IsDots())
-		{
-			char sFoundFileName[200];
-			strcpy_s(sFoundFileName, tempFind.GetFileName().GetBuffer(200));
-			if (tempFind.IsDirectory())
-			{
-				char sTempDir[200];
-				sprintf_s(sTempDir, "%s\\%s", dbname, sFoundFileName);
-				DropTable(sTempDir);
-			}
-			else
-			{
-				char sTempFileName[200];
-				sprintf_s(sTempFileName, "%s\\%s", dbname, sFoundFileName);
-				DeleteFile(sTempFileName);
-			}
+		bWorking = finder.FindNextFile();
+		if (finder.IsDirectory() && !finder.IsDots())
+		{//处理文件夹
+			char subDir[200];
+			sprintf_s(subDir, "%s", finder.GetFilePath());
+			DropDB(subDir); //递归删除文件夹
+			RemoveDirectory(finder.GetFilePath());
+		}
+		else
+		{//处理文件
+			DeleteFile(finder.GetFilePath());
 		}
 	}
-	tempFind.Close();
-	if (!RemoveDirectory(dbname))
-	{
-		return FAIL;
-	}
-	return SUCCESS;
+	bool ret = RemoveDirectory(dbname);
+	return ret ? SUCCESS : FAIL;
 }
 
 RC OpenDB(char *dbname) {
@@ -363,11 +354,6 @@ RC DropTable(char *relName) {
 	return SUCCESS;
 }
 
-//创建索引：
-//1.创建索引文件
-//2.对系统列中关于索引的两列信息的更新 
-//3.读取索引对应的表中数据，并将这些数据按照b+树形式有序写入索引文件中 
-//4.关闭相关文件
 RC CreateIndex(char *indexName, char *relName, char *attrName) {
 	return SUCCESS;
 }
@@ -376,13 +362,7 @@ RC DropIndex(char *indexName) {
 	return SUCCESS;
 }
 
-/*
-函数实现思想：
-通过读取系统表中的表信息及表的属性信息，
-然后根据这些信息向数据表中插入数据，
-插入操作类似createtable中向系统表和系统列的填充表及属性信息的操作
-*/
-//done
+
 RC Insert(char *relName, int nValues, Value *values) {
 	RM_FileHandle *rm_data, *rm_table, *rm_column;
 	char *value;//读取数据表信息
