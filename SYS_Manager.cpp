@@ -44,9 +44,16 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾ÝÖ´ÐÐµÄÓï¾äÀàÐÍÔÚ½
 		Destory_Result(&res);
 		return;
 	}
-	
+
 	//ÆäËûSQLÓï¾äµÄ´¦Àí
 	RC rc = execute(sql);
+
+	//¸üÐÂ½çÃæ
+	CHustBaseDoc *pDoc;
+	pDoc = CHustBaseDoc::GetDoc();
+	CHustBaseApp::pathvalue = true;
+	pDoc->m_pTreeView->PopulateTree();
+
 	int row_num = 0;
 	char**messages;
 	switch (rc) {
@@ -75,9 +82,6 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾ÝÖ´ÐÐµÄÓï¾äÀàÐÍÔÚ½
 }
 
 RC execute(char * sql) {
-	CHustBaseDoc *pDoc;
-	pDoc = CHustBaseDoc::GetDoc();
-
 	sqlstr *sql_str = NULL;
 	RC rc;
 	sql_str = get_sqlstr();
@@ -95,19 +99,21 @@ RC execute(char * sql) {
 
 		case 2:
 			//ÅÐ¶ÏSQLÓï¾äÎªinsertÓï¾ä
-
+			rc = Insert(sql_str->sstr.ins.relName, sql_str->sstr.ins.nValues, sql_str->sstr.ins.values);
+			break;
 		case 3:
 			//ÅÐ¶ÏSQLÓï¾äÎªupdateÓï¾ä
+			rc = Update(sql_str->sstr.upd.relName, sql_str->sstr.upd.attrName, &(sql_str->sstr.upd.value), sql_str->sstr.upd.nConditions, sql_str->sstr.upd.conditions);
 			break;
 
 		case 4:
 			//ÅÐ¶ÏSQLÓï¾äÎªdeleteÓï¾ä
+			rc = Delete(sql_str->sstr.del.relName, sql_str->sstr.del.nConditions, sql_str->sstr.del.conditions);
 			break;
 
 		case 5:
 			//ÅÐ¶ÏSQLÓï¾äÎªcreateTableÓï¾ä
 			rc = CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
-			pDoc->m_pTreeView->PopulateTree();
 			break;
 
 		case 6:
@@ -117,10 +123,12 @@ RC execute(char * sql) {
 
 		case 7:
 			//ÅÐ¶ÏSQLÓï¾äÎªcreateIndexÓï¾ä
+			rc = CreateIndex(sql_str->sstr.crei.indexName, sql_str->sstr.crei.relName, sql_str->sstr.crei.attrName);
 			break;
 
 		case 8:
 			//ÅÐ¶ÏSQLÓï¾äÎªdropIndexÓï¾ä
+			rc = DropIndex(sql_str->sstr.dri.indexName);
 			break;
 
 		case 9:
@@ -179,7 +187,7 @@ RC DropDB(char *dbname) {
 			DeleteFile(finder.GetFilePath());
 		}
 	}
-	bool ret = RemoveDirectory(dbname);
+	ret = RemoveDirectory(dbname);
 	return ret ? SUCCESS : FAIL;
 }
 
@@ -197,7 +205,7 @@ RC OpenDB(char *dbname) {
 }
 
 RC CloseDB() {
-	
+
 	return SUCCESS;
 }
 
@@ -361,7 +369,6 @@ RC CreateIndex(char *indexName, char *relName, char *attrName) {
 RC DropIndex(char *indexName) {
 	return SUCCESS;
 }
-
 
 RC Insert(char *relName, int nValues, Value *values) {
 	RM_FileHandle *rm_data, *rm_table, *rm_column;
@@ -991,7 +998,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 
 bool CanButtonClick() {//ÐèÒªÖØÐÂÊµÏÖ
 	//Èç¹ûµ±Ç°ÓÐÊý¾Ý¿âÒÑ¾­´ò¿ª
-	return true;
+	return false;
 	//Èç¹ûµ±Ç°Ã»ÓÐÊý¾Ý¿â´ò¿ª
 	//return false;
 }
