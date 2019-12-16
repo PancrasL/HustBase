@@ -71,6 +71,13 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½
 		editArea->ShowMessage(row_num, messages);
 		delete[] messages;
 		break;
+	case PF_INVALIDNAME:
+		row_num = 1;
+		messages = new char*[row_num];
+		messages[0] = "ÎŞĞ§ÎÄ¼şÃû";
+		editArea->ShowMessage(row_num, messages);
+		delete[] messages;
+		break;
 	default:
 		row_num = 1;
 		messages = new char*[row_num];
