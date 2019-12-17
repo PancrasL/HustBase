@@ -12,7 +12,7 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾ÝÖ´ÐÐµÄÓï¾äÀàÐÍÔÚ½
 	if (s_sql.find("select") == 0) {
 		SelResult res;
 		Init_Result(&res);
-		//rc = Query(sql,&res);
+		Query(sql,&res);
 		//½«²éÑ¯½á¹û´¦ÀíÒ»ÏÂ£¬ÕûÀí³ÉÏÂÃæÕâÖÖÐÎÊ½
 		//µ÷ÓÃeditArea->ShowSelResult(col_num,row_num,fields,rows);
 		int col_num = 5;
