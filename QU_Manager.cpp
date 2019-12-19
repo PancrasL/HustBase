@@ -37,12 +37,8 @@ RC Query(char * sql, SelResult * res) {
 
 	selects sel = sqlType->sstr.sel;
 	rc = Select(sel.nSelAttrs, sel.selAttrs, sel.nRelations, sel.relations, sel.nConditions, sel.conditions, res);
-	if (rc != SUCCESS)
-	{
-		return rc;
-	}
 
-	return SUCCESS;
+	return rc;
 }
 
 /*
@@ -60,9 +56,8 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 	SelResult *result = res;
 
 	rc = checkTable(nRelations, relations);
-	if (rc == RM_NOMOREIDXINMEM)
+	if (rc != SUCCESS)
 	{
-		AfxMessageBox("查询的表不存在!");
 		return rc;
 	}
 
@@ -854,7 +849,8 @@ RC checkTable(int nRelations, char **relations)
 	RM_FileHandle *sysTablesHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
 	sysTablesHandle->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", sysTablesHandle);  //首先判断表是否存在
-	if (rc != SUCCESS) return rc;
+	if (rc != SUCCESS) 
+		return rc;
 
 	Con condition;
 	condition.bLhsIsAttr = 1;
@@ -865,6 +861,7 @@ RC checkTable(int nRelations, char **relations)
 	condition.compOp = EQual;
 
 	RM_FileScan *sysTablesScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+	sysTablesScan->bOpen = false;
 	RM_Record rec;
 	for (int i = 0; i < nRelations; i++)
 	{

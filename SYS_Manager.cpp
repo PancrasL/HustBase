@@ -5,124 +5,55 @@
 #include "HustBase.h"
 #include "HustBaseDoc.h"
 #include <iostream>
+#include <vector>
+//自定义函数
+void toLowerString(std::string &s);
+void showMsg(CEditArea *editArea, char * msg);
+void showSelectResult(SelResult &res, CEditArea *editArea);
+
 
 void ExecuteAndMessage(char * sql, CEditArea* editArea) {//根据执行的语句类型在界面上显示执行结果。此函数需修改
 	std::string s_sql = sql;
-	//查询SQL语句的处理
-	for (int i = 0; i < s_sql.length(); i++)
-	{
-		s_sql[i] = tolower(s_sql[i]);
-	}
+	RC rc;
+	toLowerString(s_sql);
+	//查询语句的处理
 	if (s_sql.find("select") == 0) {
 		SelResult res;
 		Init_Result(&res);
-		RC rc = Query(sql, &res);
-		if (rc != SUCCESS)
-		{
-			int row_num = 1;
-			char **messages = new char*[row_num];
-			messages[0] = "操作失败，表格不存在";
-			editArea->ShowMessage(row_num, messages);
-			delete[] messages;
+		rc = Query(sql, &res);
+		if (rc == SUCCESS) {
+			showSelectResult(res, editArea);
 			return;
 		}
-		//将查询结果处理一下，整理成下面这种形式
-		//调用editArea->ShowSelResult(col_num,row_num,fields,rows);
-		int col_num = res.col_num;
-		int row_num = res.row_num;
-		char ** fields = new char *[col_num];
-		for (int i = 0; i < col_num; i++) {
-			fields[i] = new char[20];
-			memcpy(fields[i], res.fields[i], 20);
-		}
-		char *** rows = new char**[row_num];
-		for (int i = 0; i < row_num; i++) {
-			rows[i] = new char*[col_num];
-			for (int j = 0; j < col_num; j++) {
-				AttrType type = res.type[j];
-				int intNum;
-				double floatNum;
-				int y;
-				switch (type)
-				{
-				case AttrType::ints:
-					memcpy(&intNum, res.res[i][j], sizeof(int));
-					rows[i][j] = new char[32];
-					sprintf(rows[i][j], "%d", intNum);
-					break;
-				case AttrType::floats:
-					memcpy(&floatNum, res.res[i][j], sizeof(double));
-					y = res.length[j];
-					rows[i][j] = new char[32];
-					sprintf(rows[i][j], "%f", floatNum);
-					break;
-				case AttrType::chars:
-					rows[i][j] = new char[res.length[j]];
-					memcpy(rows[i][j], res.res[i][j], res.length[j]);
-					break;
-				default:
-					break;
-				}
+	}
+	//其他语句的处理
+	else {
+		//执行
+		rc = execute(sql);
 
-			}
-		}
-		editArea->ShowSelResult(col_num, row_num, fields, rows);
-
-		//释放空间
-		for (int i = 0; i < col_num; i++) {
-			delete[] fields[i];
-		}
-		delete[] fields;
-		for (int i = 0; i < row_num; i++) {
-			for (int j = 0; j < col_num; j++) {
-				delete[] rows[i][j];
-			}
-			delete[] rows[i];
-		}
-		delete[] rows;
-		Destory_Result(&res);
-		return;
+		//更新界面
+		CHustBaseDoc *pDoc;
+		pDoc = CHustBaseDoc::GetDoc();
+		CHustBaseApp::pathvalue = true;
+		pDoc->m_pTreeView->PopulateTree();
 	}
 
-	//其他SQL语句的处理
-	RC rc = execute(sql);
-
-	//更新界面
-	CHustBaseDoc *pDoc;
-	pDoc = CHustBaseDoc::GetDoc();
-	CHustBaseApp::pathvalue = true;
-	pDoc->m_pTreeView->PopulateTree();
-
-	int row_num = 0;
-	char**messages;
+	//执行结果
 	switch (rc) {
 	case SUCCESS:
-		row_num = 1;
-		messages = new char*[row_num];
-		messages[0] = "操作成功";
-		editArea->ShowMessage(row_num, messages);
-		delete[] messages;
+		showMsg(editArea, "操作成功");
 		break;
 	case SQL_SYNTAX:
-		row_num = 1;
-		messages = new char*[row_num];
-		messages[0] = "有语法错误";
-		editArea->ShowMessage(row_num, messages);
-		delete[] messages;
+		showMsg(editArea, "有语法错误");
 		break;
-	case PF_INVALIDNAME:
-		row_num = 1;
-		messages = new char*[row_num];
-		messages[0] = "无效文件名";
-		editArea->ShowMessage(row_num, messages);
-		delete[] messages;
+	case TABLE_NOT_EXIST:
+		showMsg(editArea, "表不存在");
+		break;
+	case PF_FILEERR:
+		showMsg(editArea, "文件不存在");
 		break;
 	default:
-		row_num = 1;
-		messages = new char*[row_num];
-		messages[0] = "功能未实现";
-		editArea->ShowMessage(row_num, messages);
-		delete[] messages;
+		showMsg(editArea, "功能未实现");
 		break;
 	}
 }
@@ -615,7 +546,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->lhsAttr.relName = (char *)malloc(21);
-						strcpy(contmp->lhsAttr.relName, relName);
+						strcpy_s(contmp->lhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
 						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -649,7 +580,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->rhsAttr.relName = (char *)malloc(21);
-						strcpy(contmp->rhsAttr.relName, relName);
+						strcpy_s(contmp->rhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
 						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -683,7 +614,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->lhsAttr.relName = (char *)malloc(21);
-						strcpy(contmp->lhsAttr.relName, relName);
+						strcpy_s(contmp->lhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
 						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -1047,4 +978,79 @@ bool CanButtonClick() {//需要重新实现
 	return true;
 	//如果当前没有数据库打开
 	//return false;
+}
+
+void toLowerString(std::string & s)
+{
+	for (int i = 0; i < s.length(); i++)
+	{
+		s[i] = tolower(s[i]);
+	}
+}
+
+void showMsg(CEditArea * editArea, char * msg)
+{
+	int row_num = 1;
+	char **messages = new char*[row_num];
+	messages[0] = msg;
+	editArea->ShowMessage(row_num, messages);
+	delete[] messages;
+}
+
+void showSelectResult(SelResult & res, CEditArea * editArea)
+{
+	/*输出执行结果*/
+	int col_num = res.col_num;
+	int row_num = res.row_num;
+	char ** fields = new char *[col_num];
+	for (int i = 0; i < col_num; i++) {
+		fields[i] = new char[20];
+		memcpy(fields[i], res.fields[i], 20);
+	}
+	char *** rows = new char**[row_num];
+	for (int i = 0; i < row_num; i++) {
+		rows[i] = new char*[col_num];
+		for (int j = 0; j < col_num; j++) {
+			AttrType type = res.type[j];
+			int intNum;
+			float floatNum;
+			int y;
+			switch (type)
+			{
+			case AttrType::ints:
+				memcpy(&intNum, res.res[i][j], sizeof(int));
+				rows[i][j] = new char[32];
+				sprintf(rows[i][j], "%d", intNum);
+				break;
+			case AttrType::floats:
+				memcpy(&floatNum, res.res[i][j], sizeof(float));
+				y = res.length[j];
+				rows[i][j] = new char[32];
+				sprintf(rows[i][j], "%f", floatNum);
+				break;
+			case AttrType::chars:
+				rows[i][j] = new char[res.length[j]];
+				memcpy(rows[i][j], res.res[i][j], res.length[j]);
+				break;
+			default:
+				break;
+			}
+
+		}
+	}
+	editArea->ShowSelResult(col_num, row_num, fields, rows);
+
+	/*释放动态分配的空间*/
+	for (int i = 0; i < col_num; i++) {
+		delete[] fields[i];
+	}
+	delete[] fields;
+	for (int i = 0; i < row_num; i++) {
+		for (int j = 0; j < col_num; j++) {
+			delete[] rows[i][j];
+		}
+		delete[] rows[i];
+	}
+	delete[] rows;
+	Destory_Result(&res);
 }
