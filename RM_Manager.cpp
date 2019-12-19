@@ -28,6 +28,21 @@ RC OpenScan(RM_FileScan *rmFileScan, RM_FileHandle *fileHandle, int conNum, Con 
 	return SUCCESS;
 }
 
+RC CloseScan(RM_FileScan * rmFileScan)
+{
+	rmFileScan->bOpen = false;
+	rmFileScan->pRMFileHandle = NULL;
+	rmFileScan->conNum = 0;
+	rmFileScan->conditions = NULL;
+	//if (rmFileScan->PageHandle != NULL)
+	//{
+	//	/*UnpinPage(rmFileScan->PageHandle);
+	//	free(rmFileScan->PageHandle);
+	//	rmFileScan->PageHandle = NULL;*/
+	//}
+	return SUCCESS;
+}
+
 RC GetNextRec(RM_FileScan *rmFileScan, RM_Record *rec)
 {
 	if (rmFileScan->bOpen == false) {

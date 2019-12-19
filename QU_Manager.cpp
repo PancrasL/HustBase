@@ -2,16 +2,10 @@
 #include "QU_Manager.h"
 #include "RM_Manager.h"
 
-//select功能的全局静态变量
-static int *_recordcount;//各个数据表包含的记录数量
-static int tablecount; //表数
-static int counterIndex;
-static int *counter;
-typedef struct printrel {
-	int i;	//保存属性对应表名对应的下标
-	SysColumn col;//保存属性信息
-}printrel;
-void handle();
+RC singleConditionSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res);
+RC multiSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res);
+RC recurSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res, int curTable, int *offsets, char *curResult);
+RC checkTable(int nRelations, char **relations);
 
 void Init_Result(SelResult * res) {
 	res->next_res = NULL;
@@ -27,424 +21,872 @@ void Destory_Result(SelResult * res) {
 	if (res->next_res != NULL) {
 		Destory_Result(res->next_res);
 	}
+
 }
 
 RC Query(char * sql, SelResult * res) {
-	sqlstr *sql_str = NULL;
 	RC rc;
-	sql_str = get_sqlstr();
-	rc = parse(sql, sql_str);//只有两种返回结果SUCCESS和SQL_SYNTAX
-	if (rc == SUCCESS) {
-		char tmp1[20], *tmp;
-		rc = Select(sql_str->sstr.sel.nSelAttrs, sql_str->sstr.sel.selAttrs, sql_str->sstr.sel.nRelations, sql_str->sstr.sel.relations, sql_str->sstr.sel.nConditions, sql_str->sstr.sel.conditions, res);
-	}
-	return rc;
-}
+	sqlstr * sqlType = NULL;
+	sqlType = get_sqlstr();
+	rc = parse(sql, sqlType);
 
-RC Select(int nSelAttrs, RelAttr ** selAttrs, int nRelations, char ** relations, int nConditions, Condition * conditions, SelResult * res)
-{
-	RM_FileHandle *rm_data, *rm_table, *rm_column;
-	RM_FileScan FileScan;
-	RM_FileScan *relscan;
-	RM_Record recdata, rectab, reccol;
-	RM_Record *recdkr;//保存一条笛卡尔记录
-	SysColumn *column, *ctmp, *ctmpleft, *ctmpright;
-	Condition *contmp;
-	int allattrcount = 0;//涉及的nRelations个数据表的属性数量之和
-	int *attrcount;//各个数据表包含的属性数量
-	int allcount = 1;//笛卡尔积的数量
-	int torf;//是否符合删除条件
-	int resultcount = 0;//结果数
-	int intvalue, intleft, intright;
-	char *charvalue, *charleft, *charright;
-	float floatvalue, floatleft, floatright;
-	RC rc;
-	printrel *pr;
-	char *res;
-	AttrType attrtype;
-	char *attention;
-
-	pr = (printrel*)malloc(nSelAttrs * sizeof(printrel));
-	//打开数据表,系统表，系统列文件
-	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
-	rm_table->bOpen = false;
-	rc = RM_OpenFile("SYSTABLES", rm_table);
 	if (rc != SUCCESS)
+	{
 		return rc;
-	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	}
+
+	selects sel = sqlType->sstr.sel;
+	rc = Select(sel.nSelAttrs, sel.selAttrs, sel.nRelations, sel.relations, sel.nConditions, sel.conditions, res);
 	if (rc != SUCCESS)
+	{
 		return rc;
-	//打开nRelations个数据表，并返回文件句柄到rm_data + i中
-	rm_data = (RM_FileHandle *)malloc(nRelations * sizeof(RM_FileHandle));
-	for (int i = 0; i < nRelations; i++) {
-		(rm_data + i)->bOpen = false;
-		rc = RM_OpenFile(relations[i], rm_data + i);
-		if (rc != SUCCESS)
-			return rc;
-	}//注意顺序： rm_data -> relations   : 0-(nRelations-1)  -> 0-(nRelations-1)
-
-	//读取系统表，获取属性数量信息，
-	//总数量保存于_allattrcount,各个关系的属性数量保存于*（_attrcount + i ）中
-	attrcount = (int *)malloc(nRelations * sizeof(int));
-	//找到各个表名对应的属性数量，并保存在_attrcount数组中
-	for (int i = 0; i < nRelations; i++) {
-		FileScan.bOpen = false;
-		rc = OpenScan(&FileScan, rm_table, 0, NULL);//每次查找初始化！
-		if (rc != SUCCESS)
-			return rc;
-		while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
-			if (strcmp(relations[i], rectab.pData) == 0) {
-				memcpy(attrcount + i, rectab.pData + 21, sizeof(int));
-				allattrcount += *(attrcount + i);//计算所涉及关系的属性的总和，保存在_allattrcount中
-				break;
-			}
-		}
-	}//注意顺序：_attrcount -> relations : 0-(nRelations-1) -> 0-(nRelations-1)
-	//读取系统列，获取涉及数据表的全部属性信息
-	//保存于以column为起始地址的空间中，顺序是按照relations表名的顺序
-	column = (SysColumn *)malloc(allattrcount * sizeof(SysColumn));//申请_allattrcount个Syscolumn空间，用于保存nRealtions个关系的属性
-	ctmp = column;
-	for (int i = 0; i < nRelations; i++) {
-		FileScan.bOpen = false;
-		rc = OpenScan(&FileScan, rm_column, 0, NULL);
-		if (rc != SUCCESS)
-			return rc;//查找每个表的属性信息都要初始化扫描
-		while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
-			if (strcmp(relations[i], reccol.pData) == 0) {//找到表名为*（relations + i）的第一个记录
-				for (int j = 0; j < *(attrcount + i); j++) {  //依次读取*（_attrcount + i）个属性
-					memcpy(ctmp->tabName, reccol.pData, 21);
-					memcpy(ctmp->attrName, reccol.pData + 21, 21);
-					memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
-					memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
-					memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
-					ctmp++;
-					rc = GetNextRec(&FileScan, &reccol);
-					if (rc != SUCCESS)
-						break;
-				}
-				break;
-			}
-		}
-	}//column -> relations : 0-(nRelations-1) -> 0-(nRelations-1)
-	//获取selAttrs对应的笛卡尔积的位置
-
-	for (int i = 0; i < nSelAttrs; i++) {
-		for (int j = 0; j < nRelations; j++) {
-			ctmp = column;
-			if (strcmp(selAttrs[i]->relName, relations[j]) == 0) {
-				pr[i].i = j;
-				for (int k = 0; k < allattrcount; k++, ctmp++) {
-					if (strcmp(selAttrs[i]->relName, ctmp->tabName) == 0 && strcmp(selAttrs[i]->attrName, ctmp->attrName) == 0) {
-						pr[i].col = *ctmp;
-						break;
-					}
-				}
-				break;
-			}
-		}
-	}
-	//读取数据表，获取记录数
-	//保存在recordcount中，顺序是按照表名relations的顺序
-	_recordcount = (int *)malloc(nRelations * sizeof(int));
-	for (int i = 0; i < nRelations; i++) {
-		FileScan.bOpen = false;
-		rc = OpenScan(&FileScan, rm_data + i, 0, NULL);
-		if (rc != SUCCESS)
-			return rc;//查找每个表的属性信息都要初始化扫描
-		*(_recordcount + i) = 0;
-		while (GetNextRec(&FileScan, &recdata) == SUCCESS) {
-			*(_recordcount + i) += 1;
-		}
-	}
-	//提取的信息包括各数据表属性数量，各数据表属性信息，各数据表的记录数
-	//第一个字符串保存属性数量，第二个字符串保存记录数，接下来的nSelAttrs个字节保存属性名
-	res = (char *)malloc((20 * 20 + 2 + nSelAttrs) * 20);
-	*RES = res;
-	charvalue = (char *)malloc(20);
-	itoa(nSelAttrs, charvalue, 10);
-	memcpy(res, charvalue, 20);
-	free(charvalue);
-	for (int i = 0; i < nSelAttrs; i++) {
-		memcpy(res + i * 20 + 40, selAttrs[i]->attrName, 20);
-	}
-	char *data = res + (2 + nSelAttrs) * 20;
-	//通过笛卡尔算法来实现各个关系的连接
-	counter = (int *)malloc(nRelations * sizeof(int));
-	for (int i = 0; i < nRelations; i++) {
-		counter[i] = 0;
-	}
-	counterIndex = nRelations - 1;
-	tablecount = nRelations;
-	relscan = (RM_FileScan *)malloc(nRelations * sizeof(RM_FileScan));
-	recdkr = (RM_Record *)malloc(nRelations * sizeof(RM_Record));
-	//对nRelations个数据表分别初始化扫描，并计算笛卡尔积的条目数
-	for (int i = 0; i < nRelations; i++) {
-		allcount *= _recordcount[i];
-		(relscan + i)->bOpen = false;
-		rc = OpenScan(relscan + i, rm_data + i, 0, NULL);
-		if (rc != SUCCESS)
-			return rc;
 	}
 
-	for (int i = 0; i < allcount; i++) {
-		//取出一条笛卡尔记录，一条笛卡尔记录对应nRelations个表中的一条记录
-		//取出relations +j的数据表的的第counter[j]个记录，放在recdkr + j处
-		//处理一条记录之后要将relscan 重新初始化扫描
-		for (int j = 0; j < nRelations; j++) {
-			for (int k = 0; k != counter[j] + 1; k++) {
-				GetNextRec(relscan + j, recdkr + j);
-			}
-			(relscan + j)->bOpen = false;
-			rc = OpenScan(relscan + j, rm_data + j, 0, NULL);
-			if (rc != SUCCESS)
-				return rc;
-		}
-		//进行判断
-		torf = 1;
-		contmp = conditions;
-		for (int x = 0; x < nConditions; x++, contmp++) {//对nSelAttrs个条件逐一判断
-			ctmpleft = ctmpright = column;//将ctmp重置到column处
-			//左属性右值
-			if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 0) {
-				for (int y = 0; y < allattrcount; y++, ctmpleft++) {//从attrcount个属性找到对应于conditions表名和属性名对应的记录
-					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)//找到条件中的属性对应系统表中的属性相关信息
-						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {
-						break;
-					}
-					if (y == allattrcount - 1) {
-						attention = strcat(contmp->lhsAttr.relName, ".");
-						attention = strcat(attention, contmp->lhsAttr.attrName);
-						attention = strcat(attention, "\r\n不存在，请检查sql语句");
-						AfxMessageBox(attention);
-						return FAIL;
-					}
-				}
-
-				for (int z = 0; z < nRelations; z++) {//找到这个条件的属性对应的表在relations数组中的下标位置    
-					if (strcmp(relations[z], ctmpleft->tabName) == 0) {
-						//对conditions的某一个条件进行判断
-						if (ctmpleft->attrType == ints) {//判定属性的类型
-							attrtype = ints;
-							memcpy(&intleft, (recdkr + z)->pData + ctmpleft->attrOffset, sizeof(int));
-							memcpy(&intright, contmp->rhsValue.data, sizeof(int));
-						}
-						else if (ctmpleft->attrType == chars) {
-							attrtype = chars;
-							charleft = (char *)malloc(ctmpleft->attrLength);
-							memcpy(charleft, (recdkr + z)->pData + ctmpleft->attrOffset, ctmpleft->attrLength);
-							charright = (char *)malloc(ctmpleft->attrLength);
-							memcpy(charright, contmp->rhsValue.data, ctmpleft->attrLength);
-						}
-						else {
-							attrtype = floats;
-							memcpy(&floatleft, (recdkr + z)->pData + ctmpleft->attrOffset, sizeof(float));
-							memcpy(&floatright, contmp->rhsValue.data, sizeof(float));
-						}
-						break;
-					}
-				}
-			}
-
-			//右属性左值
-			else  if (contmp->bLhsIsAttr == 0 && contmp->bRhsIsAttr == 1) {
-				for (int y = 0; y < allattrcount; y++, ctmpright++) {//attrcount个属性逐一判断
-					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
-						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
-						break;
-					}
-					if (y == allattrcount - 1) {
-						attention = strcat(contmp->rhsAttr.relName, ".");
-						attention = strcat(attention, contmp->rhsAttr.attrName);
-						attention = strcat(attention, "\r\n不存在，请检查sql语句");
-						AfxMessageBox(attention);
-						return FAIL;
-					}
-				}
-				for (int z = 0; z < nRelations; z++) {//找到这个条件的属性对应的表在relations数组中的下标位置    
-					if (strcmp(relations[z], ctmpleft->tabName) == 0) {
-						//对conditions的某一个条件进行判断
-						if (ctmpright->attrType == ints) {//判定属性的类型
-							attrtype = ints;
-							memcpy(&intleft, contmp->lhsValue.data, sizeof(int));
-							memcpy(&intright, (recdkr + z)->pData + ctmpright->attrOffset, sizeof(int));
-						}
-						else if (ctmpleft->attrType == chars) {
-							attrtype = chars;
-							charleft = (char *)malloc(ctmpleft->attrLength);
-							memcpy(charleft, contmp->lhsValue.data, ctmpleft->attrLength);
-							charright = (char *)malloc(ctmpleft->attrLength);
-							memcpy(charright, (recdkr + z)->pData + ctmpright->attrOffset, ctmpright->attrLength);
-						}
-						else {
-							attrtype = floats;
-							memcpy(&floatleft, contmp->lhsValue.data, sizeof(float));
-							memcpy(&floatright, (recdkr + z)->pData + ctmpright->attrOffset, sizeof(float));
-						}
-						break;
-					}
-				}
-			}
-			//左右均属性
-			else  if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 1) {
-				for (int y = 0; y < allattrcount; y++, ctmpleft++) {
-					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
-						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {
-						break;
-					}
-					if (y == allattrcount - 1) {
-						attention = strcat(contmp->lhsAttr.relName, ".");
-						attention = strcat(attention, contmp->lhsAttr.attrName);
-						attention = strcat(attention, "\r\n不存在，请检查sql语句");
-						AfxMessageBox(attention);
-						return FAIL;
-					}
-				}
-				for (int y = 0; y < allattrcount; y++, ctmpright++) {
-					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
-						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {
-						break;
-					}
-					if (y == allattrcount - 1) {
-						attention = strcat(contmp->rhsAttr.relName, ".");
-						attention = strcat(attention, contmp->rhsAttr.attrName);
-						attention = strcat(attention, "\r\n不存在，请检查sql语句");
-						AfxMessageBox(attention);
-						return FAIL;
-					}
-				}
-				//对conditions的某一个条件进行判断
-				for (int z = 0; z < nRelations; z++) {//找到这个条件的属性对应的表在relations数组中的下标位置    
-					if (strcmp(relations[z], ctmpleft->tabName) == 0) {
-						//对conditions的某一个条件进行判断
-						if (ctmpleft->attrType == ints) {//判定属性的类型
-							attrtype = ints;
-							memcpy(&intleft, (recdkr + z)->pData + ctmpleft->attrOffset, sizeof(int));
-						}
-						else if (ctmpleft->attrType == chars) {
-							attrtype = chars;
-							charleft = (char *)malloc(ctmpleft->attrLength);
-							memcpy(charleft, (recdkr + z)->pData + ctmpleft->attrOffset, ctmpleft->attrLength);
-						}
-						else {
-							attrtype = floats;
-							memcpy(&floatleft, (recdkr + z)->pData + ctmpleft->attrOffset, sizeof(float));
-						}
-					}
-					if (strcmp(relations[z], ctmpright->tabName) == 0) {
-						//对conditions的某一个条件进行判断
-						if (ctmpright->attrType == ints) {//判定属性的类型
-							memcpy(&intright, (recdkr + z)->pData + ctmpright->attrOffset, sizeof(int));
-						}
-						else if (ctmpright->attrType == chars) {
-							charright = (char *)malloc(ctmpright->attrLength);
-							memcpy(charright, (recdkr + z)->pData + ctmpright->attrOffset, ctmpright->attrLength);
-						}
-						else {
-							memcpy(&floatright, (recdkr + z)->pData + ctmpright->attrOffset, sizeof(float));
-						}
-					}
-				}
-			}
-			if (attrtype == ints) {
-				if ((intleft == intright && contmp->op == EQual) ||
-					(intleft > intright && contmp->op == GreatT) ||
-					(intleft >= intright && contmp->op == GEqual) ||
-					(intleft < intright && contmp->op == LessT) ||
-					(intleft <= intright && contmp->op == LEqual) ||
-					(intleft != intright && contmp->op == NEqual))
-					torf &= 1;
-				else
-					torf &= 0;
-			}
-			else if (attrtype == chars) {
-				if ((strcmp(charleft, charright) == 0 && contmp->op == EQual) ||
-					(strcmp(charleft, charright) > 0 && contmp->op == GreatT) ||
-					((strcmp(charleft, charright) > 0 || strcmp(charleft, charright) == 0) && contmp->op == GEqual) ||
-					(strcmp(charleft, charright) < 0 && contmp->op == LessT) ||
-					((strcmp(charleft, charright) < 0 || strcmp(charleft, charright) == 0) && contmp->op == LEqual) ||
-					(strcmp(charleft, charright) != 0 && contmp->op == NEqual))
-					torf &= 1;
-				else
-					torf &= 0;
-				free(charleft);
-				free(charright);
-			}
-			else if (attrtype == floats) {
-				if ((floatleft == floatright && contmp->op == EQual) ||
-					(floatleft > floatright && contmp->op == GreatT) ||
-					(floatleft >= floatright && contmp->op == GEqual) ||
-					(floatleft < floatright && contmp->op == LessT) ||
-					(floatleft <= floatright && contmp->op == LEqual) ||
-					(floatleft != floatright && contmp->op == NEqual))
-					torf &= 1;
-				else
-					torf &= 0;
-			}
-			else
-				torf &= 0;
-		}
-		if (torf == 1) {
-			resultcount++;
-			for (int z = 0; z < nSelAttrs; z++) {
-				if (pr[z].col.attrType == ints) {
-					memcpy(&intvalue, (recdkr + pr[z].i)->pData + pr[z].col.attrOffset, sizeof(int));
-					charvalue = (char *)malloc(20);
-					itoa(intvalue, charvalue, 10);
-					memcpy(data + z * 20, charvalue, 20);
-					free(charvalue);
-				}
-				else if (pr[z].col.attrType == chars) {
-					memcpy(data + z * 20, (recdkr + pr[z].i)->pData + pr[z].col.attrOffset, 20);
-				}
-				else {
-					memcpy(&floatvalue, (recdkr + pr[z].i)->pData + pr[z].col.attrOffset, sizeof(int));
-					sprintf(data + z * 20, "%f", floatvalue);
-				}
-			}
-			data += 20 * nSelAttrs;
-		}
-		handle();
-	}
-	resultcount++;//因为还要存储一行表头，所以此处要++
-	charvalue = (char *)malloc(20);
-	itoa(resultcount, charvalue, 10);
-	memcpy(res + 20, charvalue, 20);
-	free(charvalue);
-
-	// 释放内存，关闭文件句柄
-	free(column);
-	free(pr);
-	free(attrcount);
-	free(counter);
-	free(recdkr);
-	free(relscan);
-	rc = RM_CloseFile(rm_table);
-	if (rc != SUCCESS)
-		return rc;
-	free(rm_table);
-	rc = RM_CloseFile(rm_column);
-	if (rc != SUCCESS)
-		return rc;
-	free(rm_column);
-	for (int i = 0; i < nRelations; i++) {
-		rc = RM_CloseFile(rm_data + i);
-		if (rc != SUCCESS)
-			return rc;
-	}
-	free(rm_data);
 	return SUCCESS;
 }
 
-void handle() {
-	counter[counterIndex]++;
-	if (counter[counterIndex] >= _recordcount[counterIndex]) {
-		counter[counterIndex] = 0;
-		counterIndex--;
-		if (counterIndex >= 0) {
-			handle();
-		}
-		counterIndex = tablecount - 1;
+/*
+* 第一组参数表示查询涉及的属性
+* 第二组表示查询涉及的表
+* 第三组表示查询条件
+* 最后一个参数res用于返回查询结果集
+* 查询优化：优化查询过程，当查询涉及多个表时，设计高效的查询过程
+*/
+
+RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res)
+{
+
+	RC rc;
+	SelResult *result = res;
+
+	rc = checkTable(nRelations, relations);
+	if (rc == RM_NOMOREIDXINMEM)
+	{
+		AfxMessageBox("查询的表不存在!");
+		return rc;
 	}
+
+	/*分单表查询和多表查询*/
+	if (nRelations == 1)
+	{ //单表查询
+		if (nConditions == 0)
+		{  //无条件查询
+
+		   //如果某个属性上有索引，则索引查询；否则，全文件扫描
+			if (false)
+			{ //此处判断索引情况，暂未实现
+
+			}
+			else { //无索引，全表扫描
+
+				/*扫描SYSTABLES获得表的属性个数*/
+				RM_FileHandle *rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+				rm_table->bOpen = false;
+				rc = RM_OpenFile("SYSTABLES", rm_table);
+				if (rc != SUCCESS)
+					return rc;
+
+				RM_FileScan *rm_fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+				RM_Record *record = (RM_Record *)malloc(sizeof(RM_Record));
+				Con con;
+
+				con.attrType = chars;
+				con.bLhsIsAttr = 1;
+				con.LattrOffset = 0;
+				con.LattrLength = strlen(*relations) + 1;
+				con.compOp = EQual;
+				con.bRhsIsAttr = 0;
+				con.Rvalue = *relations;
+
+				rm_fileScan->bOpen = false;
+				rc = OpenScan(rm_fileScan, rm_table, 1, &con);
+				if (rc != SUCCESS)
+					return rc;
+
+				rc = GetNextRec(rm_fileScan, record);
+				if (rc != SUCCESS)
+					return rc;
+
+				//设置查询结果列数
+				memcpy(&(result->col_num), record->pData + sizeof(SysTable::tabName), sizeof(SysTable::attrCount));
+				//释放资源
+				CloseScan(rm_fileScan);
+				RM_CloseFile(rm_table);
+				free(rm_table);
+
+				/*扫描SYSCOLUMNS获得属性的偏移量和类型*/
+				RM_FileHandle *rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+				rm_column->bOpen = false;
+				rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+				if (rc != SUCCESS)
+					return rc;
+
+				rc = OpenScan(rm_fileScan, rm_column, 1, &con);
+				if (rc != SUCCESS)
+					return rc;
+
+				for (int i = 0; i < result->col_num; i++)
+				{
+					rc = GetNextRec(rm_fileScan, record);
+					if (rc != SUCCESS)
+						return rc;
+
+					char * column = record->pData;
+					//属性类型
+					memcpy(&result->type[i], column + 42, sizeof(AttrType));
+					//属性名
+					memcpy(&result->fields[i], column + 21, 21);
+					//属性偏移量
+					memcpy(&result->offset[i], column + 50, sizeof(int));
+					//属性长度
+					memcpy(&result->length[i], column + 46, sizeof(int));
+
+					free(record->pData);
+				}
+				CloseScan(rm_fileScan);
+				RM_CloseFile(rm_column);
+				free(rm_column);
+
+				/*扫描记录表，找出所有记录*/
+				RM_FileHandle *rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+				rm_data->bOpen = false;
+				rc = RM_OpenFile(*relations, rm_data);
+				if (rc != SUCCESS)
+					return rc;
+
+				rc = OpenScan(rm_fileScan, rm_data, 0, NULL);
+				if (rc != SUCCESS)
+					return rc;
+
+				int i = 0;
+				result->row_num = 0;
+				SelResult *curRes = result;  //尾插法向链表中插入新结点
+				while (GetNextRec(rm_fileScan, record) == SUCCESS)
+				{
+					if (curRes->row_num >= 100) //每个节点最多记录100条记录
+					{ //当前结点已经保存100条记录时，新建结点
+						curRes->next_res = (SelResult *)malloc(sizeof(SelResult));
+
+						//初始化
+						*(curRes->next_res) = *curRes;
+
+						curRes = curRes->next_res;
+						curRes->row_num = 0;
+						curRes->next_res = NULL;
+						/*	curRes->next_res->col_num = curRes->col_num;
+							for (int j = 0; j < curRes->col_num; j++)
+							{
+								strncpy(curRes->next_res->fields[i], curRes->fields[i], strlen(curRes->fields[i]));
+								curRes->next_res->type[i] = curRes->type[i];
+								curRes->next_res->offset[i] = curRes->offset[i];
+							}
+
+							curRes = curRes->next_res;
+							curRes->next_res = NULL;
+							curRes->row_num = 0;*/
+					}
+
+					auto &resultRecord = curRes->res[curRes->row_num];//结果集中的一条记录
+
+					int row_num = curRes->row_num;
+					int col_num = curRes->col_num;
+					resultRecord = new char*[col_num];//该记录保存了每个属性的值，供curRes->col_num个属性
+
+					//将具体的属性值从record->pData中提取出来
+					for (int i = 0; i < result->col_num; i++) {
+						resultRecord[i] = new char[curRes->length[i]];
+						memcpy(resultRecord[i], record->pData + curRes->offset[i], curRes->length[i]);
+					}
+					curRes->row_num++;
+					free(record->pData);
+				}
+
+				CloseScan(rm_fileScan);
+				free(rm_fileScan);
+				RM_CloseFile(rm_data);
+				free(rm_data);
+			}
+
+		}
+		else
+		{ //条件查询
+			singleConditionSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
+		}
+
+	}
+	else if (nRelations > 1)
+	{ //多表条件查询
+		multiSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
+	}
+
+	res = result;
+
+	return SUCCESS;
 }
+
+//单表条件查询
+RC singleConditionSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res)
+{
+	RC rc;
+	SelResult *resHead = res;
+
+	//如果某个属性上有索引，则索引查询；否则，全文件扫描
+	if (false)
+	{ //此处判断索引情况，暂未实现
+
+	}
+	else {
+
+		RM_FileHandle *rm_fileHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+
+		RM_FileScan *rm_fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+		RM_Record *record = (RM_Record *)malloc(sizeof(RM_Record));
+		Con cons[2];
+
+		cons[0].attrType = chars;
+		cons[0].bLhsIsAttr = 1;
+		cons[0].LattrOffset = 0;
+		cons[0].LattrLength = strlen(*relations) + 1;
+		cons[0].compOp = EQual;
+		cons[0].bRhsIsAttr = 0;
+		cons[0].Rvalue = *relations;
+
+		if (nSelAttrs == 1 && !strcmp((*selAttrs)->attrName, "*"))
+		{  //查询结果为所有属性
+			rc = RM_OpenFile("SYSTABLES", rm_fileHandle);
+			if (rc != SUCCESS) return rc;
+
+			OpenScan(rm_fileScan, rm_fileHandle, 1, &cons[0]);
+			rc = GetNextRec(rm_fileScan, record);
+			if (rc != SUCCESS) return rc;
+
+			SysTable *table = (SysTable *)record->pData;
+			memcpy(&(resHead->col_num), record->pData + 21, sizeof(int));  //设置查询结果列数
+
+			CloseScan(rm_fileScan);
+			RM_CloseFile(rm_fileHandle);
+
+			//获得属性的偏移量和类型
+			rc = RM_OpenFile("SYSCOLUMNS", rm_fileHandle);
+			if (rc != SUCCESS) return rc;
+
+			OpenScan(rm_fileScan, rm_fileHandle, 1, &cons[0]);
+
+			for (int i = 0; i < resHead->col_num; i++)
+			{
+				rc = GetNextRec(rm_fileScan, record);
+				if (rc != SUCCESS) return rc;
+
+				//SysColumns *column = (SysColumns *)record->pData;
+				char * column = record->pData;
+				//属性类型
+				//resHead->attrType[i] = column->attrtype;
+				memcpy(&resHead->type[i], column + 42, sizeof(int));
+				//属性名
+				memcpy(&resHead->fields[i], column + 21, 21);
+				//strncpy(resHead->fields[i], column->attrname, column->attrlength);
+				//属性偏移量
+				memcpy(&resHead->offset[i], column + 50, sizeof(int));
+				//属性长度
+				memcpy(&resHead->length[i], column + 46, sizeof(int));
+
+			}
+			CloseScan(rm_fileScan);
+			RM_CloseFile(rm_fileHandle);
+		}
+		else {  //查询结果为指定属性
+			resHead->col_num = nSelAttrs; //设置查询结果列数
+
+			//获得属性的偏移量和类型
+			cons[1].attrType = chars;
+			cons[1].bLhsIsAttr = 1;
+			cons[1].LattrOffset = 21;
+			cons[1].LattrLength = 21;
+			cons[1].compOp = EQual;
+			cons[1].bRhsIsAttr = 0;
+
+			rc = RM_OpenFile("SYSCOLUMNS", rm_fileHandle);
+			if (rc != SUCCESS) return rc;
+
+			for (int i = 0; i < resHead->col_num; i++)
+			{
+				cons[1].Rvalue = (selAttrs[resHead->col_num - i - 1])->attrName;
+				OpenScan(rm_fileScan, rm_fileHandle, 2, cons);
+
+				rc = GetNextRec(rm_fileScan, record);
+				if (rc != SUCCESS) return rc;
+
+				//SysColumns *column = (SysColumns *)record->pData;
+				char * column = record->pData;
+				//属性类型
+				//resHead->attrType[i] = column->attrtype;
+				memcpy(&resHead->type[i], column + 42, sizeof(int));
+				//属性名
+				memcpy(&resHead->fields[i], column + 21, 21);
+				//strncpy(resHead->fields[i], column->attrname, column->attrlength);
+				//属性偏移量
+				memcpy(&resHead->offset[i], column + 50, sizeof(int));
+				//属性长度
+				memcpy(&resHead->length[i], column + 46, sizeof(int));
+
+				CloseScan(rm_fileScan);
+			}
+
+			RM_CloseFile(rm_fileHandle);
+		}
+
+		rc = RM_OpenFile("SYSCOLUMNS", rm_fileHandle);
+		if (rc != SUCCESS) return rc;
+
+		cons[1].attrType = chars;
+		cons[1].bLhsIsAttr = 1;
+		cons[1].LattrOffset = 21;
+		cons[1].LattrLength = 21;
+		cons[1].compOp = EQual;
+		cons[1].bRhsIsAttr = 0;
+
+		//以条件查询的条件作为扫描条件
+		Con *selectCons = (Con *)malloc(sizeof(Con) * nConditions);
+		for (int i = 0; i < nConditions; i++) {
+			//只需设置con[1]->rValue,把条件里的属性设置成查询时的值
+			if (conditions[i].bLhsIsAttr == 0 && conditions[i].bRhsIsAttr == 1)
+			{  //左边是值，右边是属性
+				(cons + 1)->Rvalue = conditions[i].rhsAttr.attrName;
+			}
+			else if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 0)
+			{   //左边是属性，右边是值
+				(cons + 1)->Rvalue = conditions[i].lhsAttr.attrName;
+			}
+			else
+			{  //两边都是属性或两边都是值，暂不考虑
+
+			}
+
+			OpenScan(rm_fileScan, rm_fileHandle, 2, cons);
+			rc = GetNextRec(rm_fileScan, record);
+			if (rc != SUCCESS) return rc;
+
+			//cons[i].attrType = conditions[i].attrType;
+			selectCons[i].bLhsIsAttr = conditions[i].bLhsIsAttr;
+			selectCons[i].bRhsIsAttr = conditions[i].bRhsIsAttr;
+			selectCons[i].compOp = conditions[i].op;
+			if (conditions[i].bLhsIsAttr == 1) //左边属性
+			{ //设置属性长度和偏移量
+				memcpy(&selectCons[i].LattrLength, record->pData + 46, 4);
+				memcpy(&selectCons[i].LattrOffset, record->pData + 50, 4);
+			}
+			else {
+				selectCons[i].attrType = conditions[i].lhsValue.type;
+				selectCons[i].Lvalue = conditions[i].lhsValue.data;
+			}
+
+			if (conditions[i].bRhsIsAttr == 1) {
+				memcpy(&selectCons[i].RattrLength, record->pData + 46, 4);
+				memcpy(&selectCons[i].RattrOffset, record->pData + 50, 4);
+			}
+			else {
+				selectCons[i].attrType = conditions[i].rhsValue.type;
+				selectCons[i].Rvalue = conditions[i].rhsValue.data;
+			}
+
+			CloseScan(rm_fileScan);
+
+		}
+
+		RM_CloseFile(rm_fileHandle);
+
+		//扫描记录表，找出所有记录
+		rc = RM_OpenFile(*relations, rm_fileHandle);
+		if (rc != SUCCESS) return rc;
+
+		OpenScan(rm_fileScan, rm_fileHandle, nConditions, selectCons);
+
+		int i = 0;
+		resHead->row_num = 0;
+		SelResult *curRes = resHead;  //尾插法向链表中插入新结点
+		while (GetNextRec(rm_fileScan, record) == SUCCESS)
+		{
+			if (curRes->row_num >= 100) //每个节点最多记录100条记录
+			{ //当前结点已经保存100条记录时，新建结点
+				curRes->next_res = (SelResult *)malloc(sizeof(SelResult));
+				curRes->next_res->col_num = curRes->col_num;
+				for (int j = 0; j < curRes->col_num; j++)
+				{
+					strncpy(curRes->next_res->fields[i], curRes->fields[i], strlen(curRes->fields[i]));
+					curRes->next_res->type[i] = curRes->type[i];
+					curRes->next_res->offset[i] = curRes->offset[i];
+				}
+
+				curRes = curRes->next_res;
+				curRes->next_res = NULL;
+				curRes->row_num = 0;
+			}
+
+			curRes->res[curRes->row_num] = (char **)malloc(sizeof(char *));
+			*(curRes->res[curRes->row_num++]) = record->pData;
+
+			//int x;
+			//memcpy(&x, record->pData + 18, sizeof(int));
+			//memcpy(&x, *(curRes->res[curRes->row_num-1]) + 22, sizeof(int));
+		}
+
+		CloseScan(rm_fileScan);
+		RM_CloseFile(rm_fileHandle);
+
+		free(rm_fileHandle);
+		free(rm_fileScan);
+		free(record);
+	}
+
+	res = resHead;
+
+	return SUCCESS;
+}
+
+/*
+* 第一组参数表示查询涉及的属性
+* 第二组表示查询涉及的表
+* 第三组表示查询条件
+* 最后一个参数res用于返回查询结果集
+*/
+//多表查询
+RC multiSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res)
+{
+	RC rc;
+	SelResult *resHead = res;
+
+	//如果某个属性上有索引，则索引查询；否则，全文件扫描
+	if (false)
+	{ //此处判断索引情况，暂未实现
+
+	}
+	else {
+		RM_FileHandle *rm_fileHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+		RM_FileHandle **fileHandles = (RM_FileHandle **)malloc(sizeof(RM_FileHandle *) * nRelations);//查询涉及的每个表的文件句柄
+
+		RM_FileScan *rm_fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+		//RM_FileScan **fileScans = (RM_FileScan **)malloc(sizeof(RM_FileScan *) * nRelations); //查询涉及的每个表的文件扫描指针
+
+		for (int i = 0; i < nRelations; i++)
+		{
+			fileHandles[i] = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+			//fileScans[i] = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+
+			rc = RM_OpenFile(relations[nRelations - i - 1], fileHandles[i]);  //打开所有涉及到的表文件
+			if (rc != SUCCESS) return rc;
+		}
+
+		int *offsets = (int *)malloc(sizeof(int)*(nRelations + 1));  //每张表的查询结果在总查询结果中的起始偏移
+																	//最后一个值存储着总查询结果的长度
+																	//此查询的查询结果存储涉及到的所有表的属性信息
+		offsets[0] = 0;
+		for (int i = 1; i < nRelations + 1; i++)
+		{
+			offsets[i] = offsets[i - 1] + fileHandles[i - 1]->fileSubHeader->recordSize;
+		}
+
+		RM_Record *record = (RM_Record *)malloc(sizeof(RM_Record));
+		Con cons[2];
+
+		cons[0].attrType = chars;
+		cons[0].bLhsIsAttr = 1;
+		cons[0].LattrOffset = 0;
+		cons[0].LattrLength = 21;
+		cons[0].compOp = EQual;
+		cons[0].bRhsIsAttr = 0;
+		//cons[0].Rvalue = *relations;
+
+		if (nSelAttrs == 1 && !strcmp((*selAttrs)->attrName, "*"))
+		{  //查询结果为所有属性
+
+		}
+		else {  //查询结果为指定属性
+			resHead->col_num = nSelAttrs; //设置查询结果列数
+			resHead->row_num = 0;
+
+			//获得属性的偏移量和类型
+			cons[1].attrType = chars;
+			cons[1].bLhsIsAttr = 1;
+			cons[1].LattrOffset = 21;
+			cons[1].LattrLength = 21;
+			cons[1].compOp = EQual;
+			cons[1].bRhsIsAttr = 0;
+
+			rc = RM_OpenFile("SYSCOLUMNS", rm_fileHandle);
+			if (rc != SUCCESS) return rc;
+
+			for (int i = 0; i < resHead->col_num; i++)
+			{
+				cons[0].Rvalue = (selAttrs[resHead->col_num - i - 1])->relName;  //表名
+				cons[1].Rvalue = (selAttrs[resHead->col_num - i - 1])->attrName; //属性名
+				OpenScan(rm_fileScan, rm_fileHandle, 2, cons);
+
+				rc = GetNextRec(rm_fileScan, record);
+				if (rc != SUCCESS) return rc;
+
+				int j = 0;   //当前表在结果中的位置
+				for (; j < nRelations; j++)
+				{
+					if (!strcmp(relations[nRelations - j - 1], (char *)cons[0].Rvalue))
+					{
+						break;
+					}
+				}
+
+				//SysColumns *column = (SysColumns *)record->pData;
+				char * column = record->pData;
+				//属性类型
+				//resHead->attrType[i] = column->attrtype;
+				memcpy(&resHead->type[i], column + 42, sizeof(int));
+				//属性名
+				memcpy(&resHead->fields[i], column + 21, 21);
+				//strncpy(resHead->fields[i], column->attrname, column->attrlength);
+				//属性偏移量
+				memcpy(&resHead->offset[i], column + 50, sizeof(int));
+				resHead->offset[i] += offsets[j];
+				//属性长度
+				memcpy(&resHead->length[i], column + 46, sizeof(int));
+
+				CloseScan(rm_fileScan);
+			}
+
+			RM_CloseFile(rm_fileHandle);
+		}
+
+		for (int i = 0; i < nRelations; i++)
+		{
+			rc = RM_CloseFile(fileHandles[i]);  //关闭所有涉及到的表文件
+			if (rc != SUCCESS) return rc;
+		}
+
+		//释放申请的内存空间
+		free(rm_fileHandle);
+		free(rm_fileScan);
+		for (int i = 0; i < nRelations; i++)
+		{
+			free(fileHandles[i]);
+			//free(fileScans[i]);
+		}
+		free(fileHandles);
+		//free(fileScans);
+		free(record);
+
+
+		//递归的获取多表查询的查询结果
+		recurSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res, nRelations - 1, offsets, NULL);
+
+		free(offsets);
+	}
+
+	res = resHead;
+
+	return SUCCESS;
+}
+
+/*
+* 第一组参数表示查询涉及的属性
+* 第二组表示查询涉及的表
+* 第三组表示查询条件
+* 最后一个参数res用于返回查询结果集
+*curTable: 当前要处理的表的位置
+*offsets: 表查询结果在总的查询结果中的偏移
+*/
+//递归的获取多表查询的查询结果
+RC recurSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res, int curTable, int *offsets, char *curResult) {
+	if (curTable < 0)  //递归出口
+	{
+
+		SelResult *curRes = res;  //尾插法向链表中插入新结点
+		while (curRes->next_res != NULL) {
+			curRes = curRes->next_res;
+		}
+
+		if (curRes->row_num >= 100) //每个节点最多记录100条记录
+		{ //当前结点已经保存100条记录时，新建结点
+			curRes->next_res = (SelResult *)malloc(sizeof(SelResult));
+			//curRes->next_res->col_num = curRes->col_num;
+			//for (int j = 0; j < curRes->col_num; j++)
+			//{
+				//strncpy(curRes->next_res->fields[i], curRes->fields[i], strlen(curRes->fields[i]));
+				//curRes->next_res->attrType[i] = curRes->attrType[i];
+				//curRes->next_res->offset[i] = curRes->offset[i];
+			//}
+
+			curRes = curRes->next_res;
+			curRes->next_res = NULL;
+			curRes->row_num = 0;
+		}
+
+		curRes->res[curRes->row_num] = (char **)malloc(sizeof(char *));
+		*(curRes->res[curRes->row_num]) = (char *)malloc(sizeof(char)*offsets[nRelations]);
+		memcpy(*(curRes->res[curRes->row_num]), curResult, offsets[nRelations]);
+		curRes->row_num++;
+		return SUCCESS;
+	}
+
+	RC rc;
+	RM_FileHandle *rm_fileHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+
+	RM_FileScan *rm_fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+	RM_Record *record = (RM_Record *)malloc(sizeof(RM_Record));
+	int nSelectCons = 0;  //条件个数
+	Con **selectCons = (Con **)malloc(sizeof(Con *) * nConditions);  //条件
+	Con cons[2];     //用于查询系统列表，获取属性信息
+
+	RelAttr another;
+	int nAnother;
+
+	/*selectCons[0] = (Con *)malloc(sizeof(Con));
+	selectCons[0]->attrType = chars;
+	selectCons[0]->bLhsIsAttr = 1;
+	selectCons[0]->LattrOffset = 0;
+	selectCons[0]->LattrLength = 21;
+	selectCons[0]->compOp = EQual;
+	selectCons[0]->bRhsIsAttr = 0;
+	selectCons[0]->Rvalue = relations[curTable];*/
+
+
+	rc = RM_OpenFile("SYSCOLUMNS", rm_fileHandle);
+	if (rc != SUCCESS) return rc;
+
+	//用于查询系统列表的条件
+	cons[0].attrType = chars;
+	cons[0].bLhsIsAttr = 1;
+	cons[0].LattrOffset = 0;
+	cons[0].LattrLength = 21;
+	cons[0].compOp = EQual;
+	cons[0].bRhsIsAttr = 0;
+	cons[0].Rvalue = relations[curTable];
+
+	cons[1].attrType = chars;
+	cons[1].bLhsIsAttr = 1;
+	cons[1].LattrOffset = 21;
+	cons[1].LattrLength = 21;
+	cons[1].compOp = EQual;
+	cons[1].bRhsIsAttr = 0;
+
+	for (int i = 0; i < nConditions; i++)
+	{
+		if (!((conditions[i].bLhsIsAttr == 1 && !strcmp(conditions[i].lhsAttr.relName, relations[curTable]))
+			|| (conditions[i].bRhsIsAttr == 1 && !strcmp(conditions[i].rhsAttr.relName, relations[curTable]))))
+			continue;   //跳过与当前表无关的条件
+
+		selectCons[nSelectCons] = (Con *)malloc(sizeof(Con));
+
+		//只需设置con[1]->Rvalue,把条件里的属性设置成查询时的值
+		if (conditions[i].bLhsIsAttr == 0 && conditions[i].bRhsIsAttr == 1)
+		{  //左边是值，右边是属性
+			cons[1].Rvalue = conditions[i].rhsAttr.attrName;
+		}
+		else if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 0)
+		{   //左边是属性，右边是值
+			cons[1].Rvalue = conditions[i].lhsAttr.attrName;
+		}
+		else if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 1)
+		{  //两边都是属性
+			if (!strcmp(conditions[i].lhsAttr.relName, relations[curTable]))
+			{ //左边是要查询的表
+				cons[1].Rvalue = conditions[i].lhsAttr.attrName;
+				another.relName = conditions[i].rhsAttr.relName;
+				another.attrName = conditions[i].rhsAttr.attrName;
+			}
+			else
+			{  //右边是要查询的表
+				cons[1].Rvalue = conditions[i].rhsAttr.attrName;
+				another.relName = conditions[i].lhsAttr.relName;
+				another.attrName = conditions[i].lhsAttr.attrName;
+			}
+
+			int j = 0;
+			for (; j < nRelations; j++) {
+				if (!strcmp(relations[j], another.relName))
+				{
+					break;
+				}
+			}
+
+			if (j >= nRelations)  //语法错误
+			{
+				return SQL_SYNTAX;
+			}
+
+			if (j < curTable)  //不考虑同一表内属性比较的情况
+			{
+				continue;
+			}
+
+			nAnother = j;
+		}
+		else
+		{  //两边都是值，暂不考虑
+
+		}
+
+		OpenScan(rm_fileScan, rm_fileHandle, 2, cons);
+		rc = GetNextRec(rm_fileScan, record);
+		if (rc != SUCCESS) return rc;
+
+		//设置属性长度和偏移量
+		if (conditions[i].bLhsIsAttr == 0 && conditions[i].bRhsIsAttr == 1)
+		{  //左边是值，右边是属性
+			selectCons[nSelectCons]->bLhsIsAttr = conditions[i].bLhsIsAttr;
+			selectCons[nSelectCons]->bRhsIsAttr = conditions[i].bRhsIsAttr;
+			selectCons[nSelectCons]->compOp = conditions[i].op;
+
+			memcpy(&selectCons[nSelectCons]->RattrLength, record->pData + 46, 4);
+			memcpy(&selectCons[nSelectCons]->RattrOffset, record->pData + 50, 4);
+			selectCons[nSelectCons]->attrType = conditions[i].lhsValue.type;
+			selectCons[nSelectCons]->Lvalue = conditions[i].lhsValue.data;
+		}
+		else if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 0)
+		{   //左边是属性，右边是值
+			selectCons[nSelectCons]->bLhsIsAttr = conditions[i].bLhsIsAttr;
+			selectCons[nSelectCons]->bRhsIsAttr = conditions[i].bRhsIsAttr;
+			selectCons[nSelectCons]->compOp = conditions[i].op;
+
+			memcpy(&selectCons[nSelectCons]->LattrLength, record->pData + 46, 4);
+			memcpy(&selectCons[nSelectCons]->LattrOffset, record->pData + 50, 4);
+			selectCons[nSelectCons]->attrType = conditions[i].rhsValue.type;
+			selectCons[nSelectCons]->Rvalue = conditions[i].rhsValue.data;
+		}
+		else if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 1)
+		{  //两边都是属性
+			selectCons[nSelectCons]->bLhsIsAttr = 1;
+			selectCons[nSelectCons]->bRhsIsAttr = 0;
+			selectCons[nSelectCons]->compOp = conditions[i].op;
+
+			memcpy(&selectCons[nSelectCons]->LattrLength, record->pData + 46, 4);
+			memcpy(&selectCons[nSelectCons]->LattrOffset, record->pData + 50, 4);
+			memcpy(&selectCons[nSelectCons]->attrType, record->pData + 42, 4);
+			//if (!strcmp(conditions[i].lhsAttr.relName, relations[curTable]))
+			//{ //左边是要查询的表, 右边是做笛卡儿积的表
+			//	another.relName = conditions[i].rhsAttr.relName;
+			//	another.attrName = conditions[i].rhsAttr.attrName;
+			//}
+			//else
+			//{  //右边是要查询的表, 右边是做笛卡尔积的表
+			//	another.relName = conditions[i].lhsAttr.relName;
+			//	another.attrName = conditions[i].lhsAttr.attrName;
+			//}
+
+			//打开系统列表，获取用于做笛卡尔积的属性的信息
+
+			RM_FileHandle *fileHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+			rc = RM_OpenFile("SYSCOLUMNS", fileHandle);
+			if (rc != SUCCESS) return rc;
+
+			RM_FileScan *fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+
+			cons[0].Rvalue = another.relName;
+			cons[1].Rvalue = another.attrName;
+			OpenScan(fileScan, fileHandle, 2, cons);
+
+			rc = GetNextRec(fileScan, record);
+			if (rc != SUCCESS) return rc;
+
+			//memcpy(&selectCons[nSelectCons]->attrType, record->pData + 42, 4);
+			//从上层查询结果中提取出用于笛卡尔积的属性值
+			int offset;
+			memcpy(&offset, record->pData + 50, 4);
+			selectCons[nSelectCons]->Rvalue = curResult + offsets[nRelations - nAnother - 1] + offset;
+
+			CloseScan(fileScan);
+			RM_CloseFile(fileHandle);
+			free(fileScan);
+			free(fileHandle);
+		}
+
+		nSelectCons++;
+		CloseScan(rm_fileScan);
+
+	}
+	RM_CloseFile(rm_fileHandle);
+
+	//扫描记录表，找出所有记录
+	rc = RM_OpenFile(relations[curTable], rm_fileHandle);
+	if (rc != SUCCESS) return rc;
+
+	OpenScan(rm_fileScan, rm_fileHandle, nSelectCons, *selectCons);
+
+	rc = GetNextRec(rm_fileScan, record);
+
+	while (rc == SUCCESS)
+	{
+		char * result = (char *)malloc(sizeof(char)*(offsets[nRelations - curTable - 1 + 1]));
+		memcpy(result, curResult, offsets[nRelations - curTable - 1]);
+		memcpy(result + offsets[nRelations - curTable - 1], record->pData, rm_fileHandle->fileSubHeader->recordSize);
+
+		recurSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res, curTable - 1, offsets, result);
+		free(result);
+
+		rc = GetNextRec(rm_fileScan, record);
+		//int x;
+		//memcpy(&x, record->pData + 18, sizeof(int));
+		//memcpy(&x, *(curRes->res[curRes->row_num-1]) + 22, sizeof(int));
+	}
+
+	CloseScan(rm_fileScan);
+	RM_CloseFile(rm_fileHandle);
+
+	free(rm_fileHandle);
+	free(rm_fileScan);
+	free(record);
+	for (int i = 0; i < nSelectCons; i++)
+	{
+		free(selectCons[i]);
+	}
+	selectCons = NULL;
+	//free(selectCons);
+	return SUCCESS;
+}
+
+
+//判断查询涉及的表是否都存在
+//输入参数
+//    nRelations: 表的个数
+//    relations: 指向表名数组的指针
+//当任意一个表不存在时，返回RM_EOF
+//都存在，则返回SUCCESS
+RC checkTable(int nRelations, char **relations)
+{
+	RC rc;
+
+	RM_FileHandle *sysTablesHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	sysTablesHandle->bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", sysTablesHandle);  //首先判断表是否存在
+	if (rc != SUCCESS) return rc;
+
+	Con condition;
+	condition.bLhsIsAttr = 1;
+	condition.attrType = chars;
+	condition.LattrOffset = 0;
+
+	condition.bRhsIsAttr = 0;
+	condition.compOp = EQual;
+
+	RM_FileScan *sysTablesScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
+	RM_Record rec;
+	for (int i = 0; i < nRelations; i++)
+	{
+		condition.Rvalue = *(relations + i);
+		condition.LattrLength = strlen(*(relations + i)) + 1;
+		rc = OpenScan(sysTablesScan, sysTablesHandle, 1, &condition);
+		if (rc != SUCCESS) break;
+
+		rc = GetNextRec(sysTablesScan, &rec);   //如果表不存在，则返回TABLE_NOT_EXIST
+		if (rc != SUCCESS) {
+			rc = TABLE_NOT_EXIST;
+			break;
+		}
+		CloseScan(sysTablesScan);
+	}
+	if (sysTablesScan->bOpen)
+	{
+		CloseScan(sysTablesScan);
+	}
+	free(sysTablesScan);
+	RM_CloseFile(sysTablesHandle);
+	free(sysTablesHandle);
+	return rc;
+}
+

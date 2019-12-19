@@ -12,7 +12,7 @@
 */
 #include<stdlib.h>
 #include<string.h>
-
+#include"RC.h"
 //属性结构体
 typedef struct {
 	char *relName;     // relation name (may be NULL) 表名
@@ -157,44 +157,6 @@ typedef struct {
 	char ixName[21];	//索引的名称
 }SysColumn;
 
-#ifndef RC_HH
-#define RC_HH
-typedef enum {
-	SUCCESS = 0,
-	PF_EXIST,
-	PF_FILEERR,
-	PF_INVALIDNAME,
-	PF_WINDOWS,
-	PF_FHCLOSED,
-	PF_FHOPEN,
-	PF_PHCLOSED,
-	PF_PHOPEN,
-	PF_NOBUF,
-	PF_EOF,
-	PF_INVALIDPAGENUM,
-	PF_NOTINBUF,
-	PF_PAGEPINNED,
-	RM_FHCLOSED,
-	RM_FHOPENNED,
-	RM_INVALIDRECSIZE,
-	RM_INVALIDRID,
-	RM_FSCLOSED,
-	RM_NOMORERECINMEM,
-	RM_FSOPEN,
-	IX_IHOPENNED,
-	IX_IHCLOSED,
-	IX_INVALIDKEY,
-	IX_NOMEM,
-	RM_NOMOREIDXINMEM,
-	IX_EOF,
-	IX_SCANCLOSED,
-	IX_ISCLOSED,
-	IX_NOMOREIDXINMEM,
-	IX_SCANOPENNED,
-	FAIL,
-	SQL_SYNTAX = -10
-}RC;
-#endif
 #ifdef __cplusplus
 extern "C" {
 	sqlstr * get_sqlstr();

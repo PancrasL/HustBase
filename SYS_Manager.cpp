@@ -9,38 +9,77 @@
 void ExecuteAndMessage(char * sql, CEditArea* editArea) {//根据执行的语句类型在界面上显示执行结果。此函数需修改
 	std::string s_sql = sql;
 	//查询SQL语句的处理
+	for (int i = 0; i < s_sql.length(); i++)
+	{
+		s_sql[i] = tolower(s_sql[i]);
+	}
 	if (s_sql.find("select") == 0) {
 		SelResult res;
 		Init_Result(&res);
-		Query(sql,&res);
+		RC rc = Query(sql, &res);
+		if (rc != SUCCESS)
+		{
+			int row_num = 1;
+			char **messages = new char*[row_num];
+			messages[0] = "操作失败，表格不存在";
+			editArea->ShowMessage(row_num, messages);
+			delete[] messages;
+			return;
+		}
 		//将查询结果处理一下，整理成下面这种形式
 		//调用editArea->ShowSelResult(col_num,row_num,fields,rows);
-		int col_num = 5;
-		int row_num = 3;
-		char ** fields = new char *[5];
+		int col_num = res.col_num;
+		int row_num = res.row_num;
+		char ** fields = new char *[col_num];
 		for (int i = 0; i < col_num; i++) {
 			fields[i] = new char[20];
-			memset(fields[i], 0, 20);
-			fields[i][0] = 'f';
-			fields[i][1] = i + '0';
+			memcpy(fields[i], res.fields[i], 20);
 		}
 		char *** rows = new char**[row_num];
 		for (int i = 0; i < row_num; i++) {
 			rows[i] = new char*[col_num];
 			for (int j = 0; j < col_num; j++) {
-				rows[i][j] = new char[20];
-				memset(rows[i][j], 0, 20);
-				rows[i][j][0] = 'r';
-				rows[i][j][1] = i + '0';
-				rows[i][j][2] = '+';
-				rows[i][j][3] = j + '0';
+				AttrType type = res.type[j];
+				int intNum;
+				double floatNum;
+				int y;
+				switch (type)
+				{
+				case AttrType::ints:
+					memcpy(&intNum, res.res[i][j], sizeof(int));
+					rows[i][j] = new char[32];
+					sprintf(rows[i][j], "%d", intNum);
+					break;
+				case AttrType::floats:
+					memcpy(&floatNum, res.res[i][j], sizeof(double));
+					y = res.length[j];
+					rows[i][j] = new char[32];
+					sprintf(rows[i][j], "%f", floatNum);
+					break;
+				case AttrType::chars:
+					rows[i][j] = new char[res.length[j]];
+					memcpy(rows[i][j], res.res[i][j], res.length[j]);
+					break;
+				default:
+					break;
+				}
+
 			}
 		}
 		editArea->ShowSelResult(col_num, row_num, fields, rows);
-		for (int i = 0; i < 5; i++) {
+
+		//释放空间
+		for (int i = 0; i < col_num; i++) {
 			delete[] fields[i];
 		}
 		delete[] fields;
+		for (int i = 0; i < row_num; i++) {
+			for (int j = 0; j < col_num; j++) {
+				delete[] rows[i][j];
+			}
+			delete[] rows[i];
+		}
+		delete[] rows;
 		Destory_Result(&res);
 		return;
 	}

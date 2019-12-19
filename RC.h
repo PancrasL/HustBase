@@ -66,6 +66,8 @@ typedef enum {
 	TABLE_ROW_ERROR,
 	TABLE_DELETE_FAILED,   //表删除失败
 
+	INVALID_VALUES,			//参数错误
+
 	DATABASE_FAILED //数据库创建或删除失败
 
 }RC;
