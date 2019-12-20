@@ -7,7 +7,6 @@ typedef struct SelResult {
 	int row_num;
 	AttrType type[20];	//结果集各字段的数据类型
 	int length[20];		//结果集各字段值的长度
-	int offset[20];		//各属性的偏移量
 	char fields[20][20];//最多二十个字段名，而且每个字段的长度不超过20
 	char ** res[100];	//最多一百条记录
 	SelResult * next_res;

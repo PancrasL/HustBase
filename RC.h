@@ -26,10 +26,11 @@ typedef enum {
 	RM_FHOPENNED,
 	RM_INVALIDRECSIZE,
 
+	DB_NOT_EXIST,
+
 	TABLE_NOT_EXIST,
 
 	SQL_SYNTAX
-
 }RC;
 
 #endif

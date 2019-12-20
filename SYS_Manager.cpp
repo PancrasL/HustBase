@@ -172,9 +172,8 @@ RC DropDB(char *dbname) {
 
 RC OpenDB(char *dbname) {
 	SetCurrentDirectory(dbname);
-	int i, j;
-	if ((i = _access("SYSTABLES", 0)) != 0 || (j = _access("SYSCOLUMNS", 0)) != 0) {
-		return FAIL;
+	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
+		return DB_NOT_EXIST;
 	}
 	CHustBaseApp::pathvalue = true;
 	CHustBaseDoc *pDoc;
