@@ -196,40 +196,35 @@ RC CloseDB() {
 RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	RC rc;
 	char  *pData;
-	RM_FileHandle *rm_table, *rm_column;
-	RID *rid;
+	RM_FileHandle rm_table, rm_column;
+	RID rid;
 	int recordsize;//数据表的每条记录的大小
 	AttrInfo * attrtmp = attributes;
 
 	/*打开系统表文件并更新*/
-	rm_table = new RM_FileHandle();
-	rm_table->bOpen = false;
-	rc = RM_OpenFile("SYSTABLES", rm_table);
+	rm_table.bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS)
 		return rc;
 
 	pData = new char[sizeof(SysTable)];
 	memcpy(pData, relName, 21);
 	memcpy(pData + 21, &attrCount, sizeof(int));
-	rid = new RID();
-	rid->bValid = false;
-	rc = InsertRec(rm_table, pData, rid);
+	rid.bValid = false;
+	rc = InsertRec(&rm_table, pData, &rid);
 	if (rc != SUCCESS) {
 		return rc;
 	}
-	rc = RM_CloseFile(rm_table);
+	rc = RM_CloseFile(&rm_table);
 	if (rc != SUCCESS) {
 		return rc;
 	}
 	//释放申请的内存空间
-	delete rm_table;
 	delete[] pData;
-	delete rid;
 
 	/*打开列文件并更新*/
-	rm_column = new RM_FileHandle();
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	rm_column.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS)
 		return rc;
 	for (int i = 0, offset = 0; i < attrCount; i++, attrtmp++) {
@@ -240,21 +235,18 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 		memcpy(pData + 42 + sizeof(AttrType), &(attrtmp->attrLength), sizeof(int));
 		memcpy(pData + 42 + sizeof(int) + sizeof(AttrType), &offset, sizeof(int));
 		memcpy(pData + 42 + 2 * sizeof(int) + sizeof(AttrType), "0", sizeof(char));
-		rid = new RID();
-		rid->bValid = false;
-		rc = InsertRec(rm_column, pData, rid);
+		rid.bValid = false;
+		rc = InsertRec(&rm_column, pData, &rid);
 		if (rc != SUCCESS) {
 			return rc;
 		}
 		delete[] pData;
-		delete rid;
 		offset += attrtmp->attrLength;
 	}
-	rc = RM_CloseFile(rm_column);
+	rc = RM_CloseFile(&rm_column);
 	if (rc != SUCCESS) {
 		return rc;
 	}
-	delete rm_column;
 
 	/*创建数据表*/
 
@@ -277,7 +269,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 */
 RC DropTable(char *relName) {
 	CFile tmp;
-	RM_FileHandle *rm_table, *rm_column;
+	RM_FileHandle rm_table, rm_column;
 	RC rc;
 	RM_FileScan FileScan;
 	RM_Record rectab, reccol;
@@ -288,20 +280,18 @@ RC DropTable(char *relName) {
 
 	/*将系统表和系统列中对应表的相关记录删除*/
 	//打开表文件和列文件
-	rm_table = new RM_FileHandle();
-	rm_table->bOpen = false;
-	rc = RM_OpenFile("SYSTABLES", rm_table);
+	rm_table.bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = new RM_FileHandle();
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	rm_column.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS)
 		return rc;
 
 	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 
@@ -309,34 +299,32 @@ RC DropTable(char *relName) {
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
 			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
-			DeleteRec(rm_table, &(rectab.rid));
+			DeleteRec(&rm_table, &(rectab.rid));
 			break;
 		}
 	}
 
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_column, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
 	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
 	for (int i = 0; i < attrcount && GetNextRec(&FileScan, &reccol) == SUCCESS;) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
-			DeleteRec(rm_column, &(reccol.rid));
+			DeleteRec(&rm_column, &(reccol.rid));
 			i++;
 		}
 	}
 
 	//关闭文件句柄
-	rc = RM_CloseFile(rm_table);
+	rc = RM_CloseFile(&rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_table;
-	rc = RM_CloseFile(rm_column);
+	rc = RM_CloseFile(&rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_column;
 	return SUCCESS;
 }
 
@@ -349,9 +337,9 @@ RC DropIndex(char *indexName) {
 }
 
 RC Insert(char *relName, int nValues, Value *values) {
-	RM_FileHandle *rm_data, *rm_table, *rm_column;
+	RM_FileHandle rm_data, rm_table, rm_column;
 	char *value;//读取数据表信息
-	RID *rid;
+	RID rid;
 	RC rc;
 	SysColumn *column, *ctmp;
 	RM_FileScan FileScan;
@@ -359,30 +347,27 @@ RC Insert(char *relName, int nValues, Value *values) {
 	int attrcount;//临时 属性数量，属性长度，属性偏移
 
 	//打开数据表,系统表，系统列文件
-	rm_data = new RM_FileHandle();
-	rm_data->bOpen = false;
-	rc = RM_OpenFile(relName, rm_data);
+	rm_data.bOpen = false;
+	rc = RM_OpenFile(relName, &rm_data);
 	if (rc != SUCCESS) {
 		AfxMessageBox("打开数据表文件失败");
 		return rc;
 	}
-	rm_table = new RM_FileHandle();
-	rm_table->bOpen = false;
-	rc = RM_OpenFile("SYSTABLES", rm_table);
+	rm_table.bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS) {
 		AfxMessageBox("打开系统表文件失败");
 		return rc;
 	}
-	rm_column = new RM_FileHandle();
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	rm_column.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS) {
 		AfxMessageBox("打开系统列文件失败");
 		return rc;
 	}
 	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
 	if (rc != SUCCESS) {
 		AfxMessageBox("初始化文件扫描失败");
 		return rc;
@@ -402,7 +387,7 @@ RC Insert(char *relName, int nValues, Value *values) {
 	}
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_column, 0, NULL);
 	if (rc != SUCCESS) {
 		AfxMessageBox("初始化数据列文件扫描失败");
 		return rc;
@@ -429,43 +414,38 @@ RC Insert(char *relName, int nValues, Value *values) {
 	ctmp = column;
 
 	//向数据表中循环插入记录
-	value = new char[rm_data->fileSubHeader->recordSize];
+	value = new char[rm_data.fileSubHeader->recordSize];
 	values = values + nValues - 1;
 	for (int i = 0; i < nValues; i++, values--, ctmp++) {
 		memcpy(value + ctmp->attrOffset, values->data, ctmp->attrLength);
 	}
-	rid = new RID();
-	rid->bValid = false;
-	InsertRec(rm_data, value, rid);
-	delete rid;
+	rid.bValid = false;
+	InsertRec(&rm_data, value, &rid);
 	delete[] value;
 
 	delete[] column;
 
 	//关闭文件句柄
-	rc = RM_CloseFile(rm_data);
+	rc = RM_CloseFile(&rm_data);
 	if (rc != SUCCESS) {
 		AfxMessageBox("关闭数据表失败");
 		return rc;
 	}
-	delete rm_data;
-	rc = RM_CloseFile(rm_table);
+	rc = RM_CloseFile(&rm_table);
 	if (rc != SUCCESS) {
 		AfxMessageBox("关闭系统表失败");
 		return rc;
 	}
-	delete rm_table;
-	rc = RM_CloseFile(rm_column);
+	rc = RM_CloseFile(&rm_column);
 	if (rc != SUCCESS) {
 		AfxMessageBox("关闭系统列失败");
 		return rc;
 	}
-	delete rm_column;
 	return SUCCESS;
 }
 
 RC Delete(char *relName, int nConditions, Condition *conditions) {
-	RM_FileHandle *rm_data, *rm_table, *rm_column;
+	RM_FileHandle rm_data, rm_table, rm_column;
 	RC rc;
 	RM_FileScan FileScan;
 	RM_Record recdata, rectab, reccol;
@@ -479,25 +459,22 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 	AttrType attrtype;
 
 	//打开数据表,系统表，系统列文件
-	rm_data = new RM_FileHandle();
-	rm_data->bOpen = false;
-	rc = RM_OpenFile(relName, rm_data);
+	rm_data.bOpen = false;
+	rc = RM_OpenFile(relName, &rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	rm_table = new RM_FileHandle();
-	rm_table->bOpen = false;
-	rc = RM_OpenFile("SYSTABLES", rm_table);
+	rm_table.bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = new RM_FileHandle();
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	rm_column.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS)
 		return rc;
 
 	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
@@ -510,7 +487,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_column, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
@@ -536,7 +513,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 
 	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_data, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_data, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的数据表中的记录,并将记录信息保存于recdata中
@@ -696,30 +673,27 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 		}
 
 		if (torf == 1) {
-			DeleteRec(rm_data, &(recdata.rid));
+			DeleteRec(&rm_data, &(recdata.rid));
 		}
 	}
 	delete[] column;
 
 	//关闭文件句柄
-	rc = RM_CloseFile(rm_table);
+	rc = RM_CloseFile(&rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_table;
-	rc = RM_CloseFile(rm_column);
+	rc = RM_CloseFile(&rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_column;
-	rc = RM_CloseFile(rm_data);
+	rc = RM_CloseFile(&rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_data;
 	return SUCCESS;
 }
 
 RC Update(char *relName, char *attrName, Value *Value, int nConditions, Condition *conditions) {
 	//只能进行单值更新
-	RM_FileHandle *rm_data, *rm_table, *rm_column;
+	RM_FileHandle rm_data, rm_table, rm_column;
 	RC rc;
 	RM_FileScan FileScan;
 	RM_Record recdata, rectab, reccol;
@@ -733,25 +707,22 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 	AttrType attrtype;
 
 	//打开数据表,系统表，系统列文件
-	rm_data = new RM_FileHandle();
-	rm_data->bOpen = false;
-	rc = RM_OpenFile(relName, rm_data);
+	rm_data.bOpen = false;
+	rc = RM_OpenFile(relName, &rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	rm_table = new RM_FileHandle();
-	rm_table->bOpen = false;
-	rc = RM_OpenFile("SYSTABLES", rm_table);
+	rm_table.bOpen = false;
+	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = new RM_FileHandle();
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	rm_column.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS)
 		return rc;
 
 	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_table, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
@@ -764,7 +735,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_column, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_column, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
@@ -793,7 +764,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 
 	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
 	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, rm_data, 0, NULL);
+	rc = OpenScan(&FileScan, &rm_data, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
 	//循环查找表名为relName对应的数据表中的记录,并将记录信息保存于recdata中
@@ -953,25 +924,22 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 		}
 		if (torf == 1) {
 			memcpy(recdata.pData + cupdate->attrOffset, Value->data, cupdate->attrLength);
-			UpdateRec(rm_data, &recdata);
+			UpdateRec(&rm_data, &recdata);
 		}
 	}
 
 	delete[] column;
 
 	//关闭文件句柄
-	rc = RM_CloseFile(rm_table);
+	rc = RM_CloseFile(&rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_table;
-	rc = RM_CloseFile(rm_column);
+	rc = RM_CloseFile(&rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_column;
-	rc = RM_CloseFile(rm_data);
+	rc = RM_CloseFile(&rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	delete rm_data;
 	return SUCCESS;
 }
 

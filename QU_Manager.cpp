@@ -223,7 +223,7 @@ RC singleNoConditionSelect(int nSelAttrs, RelAttr ** selAttrs, int nRelations, c
 		for (int k = 0; k < nSelAttrs; k++) {
 			int attrIndex = tableMetaData.mp[realSelAttrs[k]];
 			//属性名
-			strcpy(res->fields[k], tableMetaData.attrNames[attrIndex].c_str());
+			strcpy_s(res->fields[k], tableMetaData.attrNames[attrIndex].c_str());
 			//属性长度
 			res->length[k] = tableMetaData.lengths[attrIndex];
 			//属性类型
