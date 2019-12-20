@@ -6,9 +6,14 @@
 #include "HustBaseDoc.h"
 #include <iostream>
 #include <vector>
-//自定义函数
+bool isOpened = false;//标识数据库是否打开
+
+/*自定义函数*/
+//将字符串转换为小写
 void toLowerString(std::string &s);
+//在界面显示一条消息
 void showMsg(CEditArea *editArea, char * msg);
+//输出select的查询结果
 void showSelectResult(SelResult &res, CEditArea *editArea);
 
 
@@ -64,64 +69,60 @@ RC execute(char * sql) {
 	sql_str = get_sqlstr();
 	rc = parse(sql, sql_str);//只有两种返回结果SUCCESS和SQL_SYNTAX
 
-	if (rc == SUCCESS)
+	if (rc != SUCCESS)
+		return rc;
+
+	switch (sql_str->flag)
 	{
-		int i = 0;
-		switch (sql_str->flag)
-		{
-			//case 1:
-			////判断SQL语句为select语句
+		//case 1:
+		////判断SQL语句为select语句
 
-			//break;
+		//break;
 
-		case 2:
-			//判断SQL语句为insert语句
-			rc = Insert(sql_str->sstr.ins.relName, sql_str->sstr.ins.nValues, sql_str->sstr.ins.values);
-			break;
-		case 3:
-			//判断SQL语句为update语句
-			rc = Update(sql_str->sstr.upd.relName, sql_str->sstr.upd.attrName, &(sql_str->sstr.upd.value), sql_str->sstr.upd.nConditions, sql_str->sstr.upd.conditions);
-			break;
+	case 2:
+		//判断SQL语句为insert语句
+		rc = Insert(sql_str->sstr.ins.relName, sql_str->sstr.ins.nValues, sql_str->sstr.ins.values);
+		break;
+	case 3:
+		//判断SQL语句为update语句
+		rc = Update(sql_str->sstr.upd.relName, sql_str->sstr.upd.attrName, &(sql_str->sstr.upd.value), sql_str->sstr.upd.nConditions, sql_str->sstr.upd.conditions);
+		break;
 
-		case 4:
-			//判断SQL语句为delete语句
-			rc = Delete(sql_str->sstr.del.relName, sql_str->sstr.del.nConditions, sql_str->sstr.del.conditions);
-			break;
+	case 4:
+		//判断SQL语句为delete语句
+		rc = Delete(sql_str->sstr.del.relName, sql_str->sstr.del.nConditions, sql_str->sstr.del.conditions);
+		break;
 
-		case 5:
-			//判断SQL语句为createTable语句
-			rc = CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
-			break;
+	case 5:
+		//判断SQL语句为createTable语句
+		rc = CreateTable(sql_str->sstr.cret.relName, sql_str->sstr.cret.attrCount, sql_str->sstr.cret.attributes);
+		break;
 
-		case 6:
-			//判断SQL语句为dropTable语句
-			rc = DropTable(sql_str->sstr.drt.relName);
-			break;
+	case 6:
+		//判断SQL语句为dropTable语句
+		rc = DropTable(sql_str->sstr.drt.relName);
+		break;
 
-		case 7:
-			//判断SQL语句为createIndex语句
-			rc = CreateIndex(sql_str->sstr.crei.indexName, sql_str->sstr.crei.relName, sql_str->sstr.crei.attrName);
-			break;
+	case 7:
+		//判断SQL语句为createIndex语句
+		rc = CreateIndex(sql_str->sstr.crei.indexName, sql_str->sstr.crei.relName, sql_str->sstr.crei.attrName);
+		break;
 
-		case 8:
-			//判断SQL语句为dropIndex语句
-			rc = DropIndex(sql_str->sstr.dri.indexName);
-			break;
+	case 8:
+		//判断SQL语句为dropIndex语句
+		rc = DropIndex(sql_str->sstr.dri.indexName);
+		break;
 
-		case 9:
-			//判断为help语句，可以给出帮助提示
-			break;
+	case 9:
+		//判断为help语句，可以给出帮助提示
+		break;
 
-		case 10:
-			//判断为exit语句，可以由此进行退出操作
-			break;
-		}
-		return rc;
+	case 10:
+		//判断为exit语句，可以由此进行退出操作
+		break;
 	}
-	else {
-		AfxMessageBox(sql_str->sstr.errors);//弹出警告框，sql语句词法解析错误信息
-		return rc;
-	}
+	return SUCCESS;
+
 }
 
 RC CreateDB(char *dbpath, char *dbname) {
@@ -178,11 +179,12 @@ RC OpenDB(char *dbname) {
 	CHustBaseDoc *pDoc;
 	pDoc = CHustBaseDoc::GetDoc();
 	pDoc->m_pTreeView->PopulateTree();
+	isOpened = true;
 	return SUCCESS;
 }
 
 RC CloseDB() {
-
+	isOpened = false;
 	return SUCCESS;
 }
 
@@ -199,23 +201,17 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	int recordsize;//数据表的每条记录的大小
 	AttrInfo * attrtmp = attributes;
 
-	/*打开系统表文件和系统列文件*/
-	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	/*打开系统表文件并更新*/
+	rm_table = new RM_FileHandle();
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
-	rm_column->bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
-	if (rc != SUCCESS)
-		return rc;
 
-	/*更新系统表文件*/
-	pData = (char *)malloc(sizeof(SysTable));
+	pData = new char[sizeof(SysTable)];
 	memcpy(pData, relName, 21);
 	memcpy(pData + 21, &attrCount, sizeof(int));
-	rid = (RID *)malloc(sizeof(RID));
+	rid = new RID();
 	rid->bValid = false;
 	rc = InsertRec(rm_table, pData, rid);
 	if (rc != SUCCESS) {
@@ -226,34 +222,39 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 		return rc;
 	}
 	//释放申请的内存空间
-	free(rm_table);
-	free(pData);
-	free(rid);
+	delete rm_table;
+	delete[] pData;
+	delete rid;
 
-	/*更新系统列文件，一个表中包含多个属性列*/
+	/*打开列文件并更新*/
+	rm_column = new RM_FileHandle();
+	rm_column->bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
+	if (rc != SUCCESS)
+		return rc;
 	for (int i = 0, offset = 0; i < attrCount; i++, attrtmp++) {
-		pData = (char *)malloc(sizeof(SysColumn));
+		pData = new char[sizeof(SysColumn)];
 		memcpy(pData, relName, 21);
 		memcpy(pData + 21, attrtmp->attrName, 21);
 		memcpy(pData + 42, &(attrtmp->attrType), sizeof(AttrType));
 		memcpy(pData + 42 + sizeof(AttrType), &(attrtmp->attrLength), sizeof(int));
 		memcpy(pData + 42 + sizeof(int) + sizeof(AttrType), &offset, sizeof(int));
 		memcpy(pData + 42 + 2 * sizeof(int) + sizeof(AttrType), "0", sizeof(char));
-		rid = (RID *)malloc(sizeof(RID));
+		rid = new RID();
 		rid->bValid = false;
 		rc = InsertRec(rm_column, pData, rid);
 		if (rc != SUCCESS) {
 			return rc;
 		}
-		free(pData);
-		free(rid);
+		delete[] pData;
+		delete rid;
 		offset += attrtmp->attrLength;
 	}
 	rc = RM_CloseFile(rm_column);
 	if (rc != SUCCESS) {
 		return rc;
 	}
-	free(rm_column);
+	delete rm_column;
 
 	/*创建数据表*/
 
@@ -287,12 +288,12 @@ RC DropTable(char *relName) {
 
 	/*将系统表和系统列中对应表的相关记录删除*/
 	//打开表文件和列文件
-	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table = new RM_FileHandle();
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column = new RM_FileHandle();
 	rm_column->bOpen = false;
 	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
 	if (rc != SUCCESS)
@@ -331,11 +332,11 @@ RC DropTable(char *relName) {
 	rc = RM_CloseFile(rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_table);
+	delete rm_table;
 	rc = RM_CloseFile(rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_column);
+	delete rm_column;
 	return SUCCESS;
 }
 
@@ -358,21 +359,21 @@ RC Insert(char *relName, int nValues, Value *values) {
 	int attrcount;//临时 属性数量，属性长度，属性偏移
 
 	//打开数据表,系统表，系统列文件
-	rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_data = new RM_FileHandle();
 	rm_data->bOpen = false;
 	rc = RM_OpenFile(relName, rm_data);
 	if (rc != SUCCESS) {
 		AfxMessageBox("打开数据表文件失败");
 		return rc;
 	}
-	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table = new RM_FileHandle();
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
 	if (rc != SUCCESS) {
 		AfxMessageBox("打开系统表文件失败");
 		return rc;
 	}
-	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column = new RM_FileHandle();
 	rm_column->bOpen = false;
 	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
 	if (rc != SUCCESS) {
@@ -408,7 +409,7 @@ RC Insert(char *relName, int nValues, Value *values) {
 	}
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
 	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
-	column = (SysColumn *)malloc(attrcount * sizeof(SysColumn));
+	column = new SysColumn[attrcount]();
 	ctmp = column;
 	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
@@ -428,17 +429,18 @@ RC Insert(char *relName, int nValues, Value *values) {
 	ctmp = column;
 
 	//向数据表中循环插入记录
-	value = (char *)malloc(rm_data->fileSubHeader->recordSize);
+	value = new char[rm_data->fileSubHeader->recordSize];
 	values = values + nValues - 1;
 	for (int i = 0; i < nValues; i++, values--, ctmp++) {
 		memcpy(value + ctmp->attrOffset, values->data, ctmp->attrLength);
 	}
-	rid = (RID*)malloc(sizeof(RID));
+	rid = new RID();
 	rid->bValid = false;
 	InsertRec(rm_data, value, rid);
-	free(value);
-	free(rid);
-	free(column);
+	delete rid;
+	delete[] value;
+
+	delete[] column;
 
 	//关闭文件句柄
 	rc = RM_CloseFile(rm_data);
@@ -446,19 +448,19 @@ RC Insert(char *relName, int nValues, Value *values) {
 		AfxMessageBox("关闭数据表失败");
 		return rc;
 	}
-	free(rm_data);
+	delete rm_data;
 	rc = RM_CloseFile(rm_table);
 	if (rc != SUCCESS) {
 		AfxMessageBox("关闭系统表失败");
 		return rc;
 	}
-	free(rm_table);
+	delete rm_table;
 	rc = RM_CloseFile(rm_column);
 	if (rc != SUCCESS) {
 		AfxMessageBox("关闭系统列失败");
 		return rc;
 	}
-	free(rm_column);
+	delete rm_column;
 	return SUCCESS;
 }
 
@@ -477,17 +479,17 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 	AttrType attrtype;
 
 	//打开数据表,系统表，系统列文件
-	rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_data = new RM_FileHandle();
 	rm_data->bOpen = false;
 	rc = RM_OpenFile(relName, rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table = new RM_FileHandle();
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column = new RM_FileHandle();
 	rm_column->bOpen = false;
 	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
 	if (rc != SUCCESS)
@@ -513,7 +515,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
 	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
-	column = (SysColumn *)malloc(attrcount * sizeof(SysColumn));
+	column = new SysColumn[attrcount]();
 	ctmp = column;
 	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
@@ -545,7 +547,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 			if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 0) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->lhsAttr.relName = (char *)malloc(21);
+						contmp->lhsAttr.relName = new char[21];
 						strcpy_s(contmp->lhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
@@ -563,9 +565,9 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 					break;
 				case chars:
 					attrtype = chars;
-					charleft = (char *)malloc(ctmpleft->attrLength);
+					charleft = new char[ctmpleft->attrLength];
 					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpleft->attrLength);
-					charright = (char *)malloc(ctmpleft->attrLength);
+					charright = new char[ctmpleft->attrLength];
 					memcpy(charright, contmp->rhsValue.data, ctmpleft->attrLength);
 					break;
 				case floats:
@@ -579,7 +581,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 			if (contmp->bLhsIsAttr == 0 && contmp->bRhsIsAttr == 1) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->rhsAttr.relName = (char *)malloc(21);
+						contmp->rhsAttr.relName = new char[21];
 						strcpy_s(contmp->rhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
@@ -597,9 +599,9 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 					break;
 				case chars:
 					attrtype = chars;
-					charleft = (char *)malloc(ctmpright->attrLength);
+					charleft = new char[ctmpright->attrLength];
 					memcpy(charleft, contmp->lhsValue.data, ctmpright->attrLength);
-					charright = (char *)malloc(ctmpright->attrLength);
+					charright = new char[ctmpright->attrLength];
 					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
 					break;
 				case floats:
@@ -613,7 +615,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 			else  if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 1) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->lhsAttr.relName = (char *)malloc(21);
+						contmp->lhsAttr.relName = new char[21];
 						strcpy_s(contmp->lhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
@@ -624,7 +626,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 				}
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->rhsAttr.relName = (char *)malloc(21);
+						contmp->rhsAttr.relName = new char[21];
 						strcpy(contmp->rhsAttr.relName, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
@@ -642,9 +644,9 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 					break;
 				case chars:
 					attrtype = chars;
-					charleft = (char *)malloc(ctmpright->attrLength);
+					charleft = new char[ctmpright->attrLength];
 					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpright->attrLength);
-					charright = (char *)malloc(ctmpright->attrLength);
+					charright = new char[ctmpright->attrLength];
 					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
 					break;
 				case floats:
@@ -675,8 +677,8 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 					torf &= 1;
 				else
 					torf &= 0;
-				free(charleft);
-				free(charright);
+				delete[] charleft;
+				delete[] charright;
 			}
 			else if (attrtype == floats) {
 				if ((floatleft == floatright && contmp->op == EQual) ||
@@ -697,21 +699,21 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 			DeleteRec(rm_data, &(recdata.rid));
 		}
 	}
-	free(column);
+	delete[] column;
 
 	//关闭文件句柄
 	rc = RM_CloseFile(rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_table);
+	delete rm_table;
 	rc = RM_CloseFile(rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_column);
+	delete rm_column;
 	rc = RM_CloseFile(rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_data);
+	delete rm_data;
 	return SUCCESS;
 }
 
@@ -731,17 +733,17 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 	AttrType attrtype;
 
 	//打开数据表,系统表，系统列文件
-	rm_data = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_data = new RM_FileHandle();
 	rm_data->bOpen = false;
 	rc = RM_OpenFile(relName, rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	rm_table = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_table = new RM_FileHandle();
 	rm_table->bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	rm_column = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
+	rm_column = new RM_FileHandle();
 	rm_column->bOpen = false;
 	rc = RM_OpenFile("SYSCOLUMNS", rm_column);
 	if (rc != SUCCESS)
@@ -767,8 +769,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 		return rc;
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
 	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
-	column = (SysColumn *)malloc(attrcount * sizeof(SysColumn));
-	cupdate = (SysColumn *)malloc(sizeof(SysColumn));
+	column = new SysColumn[attrcount]();
 	ctmp = column;
 	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
@@ -803,7 +804,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 			if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 0) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->lhsAttr.relName = (char *)malloc(21);
+						contmp->lhsAttr.relName = new char[21];
 						strcpy(contmp->lhsAttr.relName, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
@@ -820,9 +821,9 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				}
 				else if (ctmpleft->attrType == chars) {
 					attrtype = chars;
-					charleft = (char *)malloc(ctmpleft->attrLength);
+					charleft = new char[ctmpleft->attrLength];
 					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpleft->attrLength);
-					charright = (char *)malloc(ctmpleft->attrLength);
+					charright = new char[ctmpleft->attrLength];
 					memcpy(charright, contmp->rhsValue.data, ctmpleft->attrLength);
 				}
 				else if (ctmpleft->attrType == floats) {
@@ -837,7 +838,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 			else  if (contmp->bLhsIsAttr == 0 && contmp->bRhsIsAttr == 1) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->rhsAttr.relName = (char *)malloc(21);
+						contmp->rhsAttr.relName = new char[21];
 						strcpy(contmp->rhsAttr.relName, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
@@ -854,9 +855,9 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				}
 				else if (ctmpright->attrType == chars) {
 					attrtype = chars;
-					charleft = (char *)malloc(ctmpright->attrLength);
+					charleft = new char[ctmpright->attrLength];
 					memcpy(charleft, contmp->lhsValue.data, ctmpright->attrLength);
-					charright = (char *)malloc(ctmpright->attrLength);
+					charright = new char[ctmpright->attrLength];
 					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
 				}
 				else if (ctmpright->attrType == floats) {
@@ -871,7 +872,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 			else  if (contmp->bLhsIsAttr == 1 && contmp->bRhsIsAttr == 1) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->lhsAttr.relName = (char *)malloc(21);
+						contmp->lhsAttr.relName = new char[21];
 						strcpy(contmp->lhsAttr.relName, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
@@ -882,7 +883,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				}
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
-						contmp->rhsAttr.relName = (char *)malloc(21);
+						contmp->rhsAttr.relName = new char[21];
 						strcpy(contmp->rhsAttr.relName, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
@@ -899,9 +900,9 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				}
 				else if (ctmpright->attrType == chars && ctmpleft->attrType == chars) {
 					attrtype = chars;
-					charleft = (char *)malloc(ctmpright->attrLength);
+					charleft = new char[ctmpright->attrLength];
 					memcpy(charleft, recdata.pData + ctmpleft->attrOffset, ctmpright->attrLength);
-					charright = (char *)malloc(ctmpright->attrLength);
+					charright = new char[ctmpright->attrLength];
 					memcpy(charright, recdata.pData + ctmpright->attrOffset, ctmpright->attrLength);
 				}
 				else if (ctmpright->attrType == floats && ctmpleft->attrType == floats) {
@@ -933,8 +934,8 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 					torf &= 1;
 				else
 					torf &= 0;
-				free(charleft);
-				free(charright);
+				delete[] charleft;
+				delete[] charright;
 			}
 			else if (attrtype == floats) {
 				if ((floatleft == floatright && contmp->op == EQual) ||
@@ -956,28 +957,26 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 		}
 	}
 
-	free(column);
+	delete[] column;
+
 	//关闭文件句柄
 	rc = RM_CloseFile(rm_table);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_table);
+	delete rm_table;
 	rc = RM_CloseFile(rm_column);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_column);
+	delete rm_column;
 	rc = RM_CloseFile(rm_data);
 	if (rc != SUCCESS)
 		return rc;
-	free(rm_data);
+	delete rm_data;
 	return SUCCESS;
 }
 
 bool CanButtonClick() {//需要重新实现
-	//如果当前有数据库已经打开
-	return true;
-	//如果当前没有数据库打开
-	//return false;
+	return isOpened;
 }
 
 void toLowerString(std::string & s)
@@ -1002,7 +1001,7 @@ void showSelectResult(SelResult & res, CEditArea * editArea)
 	/*输出执行结果*/
 	int col_num = res.col_num;
 	int row_num = res.row_num;
-	char ** fields = new char *[col_num];
+	char ** fields = new char*[col_num];
 	for (int i = 0; i < col_num; i++) {
 		fields[i] = new char[20];
 		memcpy(fields[i], res.fields[i], 20);

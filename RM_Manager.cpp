@@ -17,7 +17,7 @@ RC OpenScan(RM_FileScan *rmFileScan, RM_FileHandle *fileHandle, int conNum, Con 
 		rmFileScan->conditions = NULL;
 	else
 	{
-		rmFileScan->conditions = (Con *)malloc(conNum * sizeof(Con));
+		rmFileScan->conditions = new Con[conNum]();
 		memcpy(rmFileScan->conditions, conditions, conNum * sizeof(Con));
 	}
 	rmFileScan->pinnedPageCount = 0;
@@ -34,12 +34,7 @@ RC CloseScan(RM_FileScan * rmFileScan)
 	rmFileScan->pRMFileHandle = NULL;
 	rmFileScan->conNum = 0;
 	rmFileScan->conditions = NULL;
-	//if (rmFileScan->PageHandle != NULL)
-	//{
-	//	/*UnpinPage(rmFileScan->PageHandle);
-	//	free(rmFileScan->PageHandle);
-	//	rmFileScan->PageHandle = NULL;*/
-	//}
+	delete[] rmFileScan->conditions;
 	return SUCCESS;
 }
 
@@ -140,7 +135,7 @@ RC GetNextRecInMem(RM_FileScan *rmFileScan, RM_Record *rec)
 				if (rec->pData) {
 					//	free(rec->pData);
 				}
-				rec->pData = (char *)malloc(rmFileScan->pRMFileHandle->fileSubHeader->recordSize);
+				rec->pData = new char[rmFileScan->pRMFileHandle->fileSubHeader->recordSize];
 				memcpy(rec->pData, pRec, (rmFileScan->pRMFileHandle->fileSubHeader->recordSize));
 
 				rc = GetPageNum(rmFileScan->pfPageHandles + rmFileScan->phIx, &(rec->rid.pageNum));
