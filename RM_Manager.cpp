@@ -20,6 +20,7 @@ RC OpenScan(RM_FileScan *rmFileScan, RM_FileHandle *fileHandle, int conNum, Con 
 		rmFileScan->conditions = new Con[conNum]();
 		memcpy(rmFileScan->conditions, conditions, conNum * sizeof(Con));
 	}
+	//初始化文件扫描结构
 	rmFileScan->pinnedPageCount = 0;
 	rmFileScan->phIx = 0;
 	rmFileScan->snIx = 0;
@@ -30,10 +31,16 @@ RC OpenScan(RM_FileScan *rmFileScan, RM_FileHandle *fileHandle, int conNum, Con 
 
 RC CloseScan(RM_FileScan * rmFileScan)
 {
+	if (!rmFileScan->bOpen)
+		return RM_FSCLOSED;//扫描已关闭
 	rmFileScan->bOpen = false;
-	rmFileScan->pRMFileHandle = NULL;
-	rmFileScan->conNum = 0;
 	rmFileScan->conditions = NULL;
+	rmFileScan->conNum = 0;
+	rmFileScan->pnLast = 0;
+	rmFileScan->snIx = 0;
+	rmFileScan->phIx = 0;
+	rmFileScan->N = 0;
+	//UnpinPage(&rmFileScan->PageHandle);//关闭文件扫描
 	delete[] rmFileScan->conditions;
 	return SUCCESS;
 }
@@ -62,7 +69,7 @@ RC FetchPages(RM_FileScan *rmFileScan)
 	if (rmFileScan->bOpen == false) {
 		return RM_FSCLOSED;
 	}
-
+	//清空缓存页面
 	if (rmFileScan->pinnedPageCount > 0) {
 		for (i = 0; i < rmFileScan->pinnedPageCount; i++) {
 			rc = UnpinPage(rmFileScan->pfPageHandles + i);
@@ -75,7 +82,7 @@ RC FetchPages(RM_FileScan *rmFileScan)
 	rmFileScan->phIx = 0;
 	rmFileScan->snIx = 0;
 	rmFileScan->N = 1;
-
+	//重新加载缓存页面
 	for (i = 0; i < rmFileScan->N; i++) {
 		rc = GetThisPage(&(rmFileScan->pRMFileHandle->pfFileHandle), rmFileScan->pnLast + 1, rmFileScan->pfPageHandles + i);
 		if (rc != SUCCESS) {
@@ -105,7 +112,7 @@ RC GetNextRecInMem(RM_FileScan *rmFileScan, RM_Record *rec)
 		return RM_FSCLOSED;
 	}
 
-	if (rmFileScan->phIx >= rmFileScan->pinnedPageCount) {
+	if (rmFileScan->phIx >= rmFileScan->pinnedPageCount) {//当前索引大于打开页数
 		return RM_NOMORERECINMEM;
 	}
 
@@ -125,10 +132,10 @@ RC GetNextRecInMem(RM_FileScan *rmFileScan, RM_Record *rec)
 				return rc;
 			}
 			offset = rmFileScan->pRMFileHandle->fileSubHeader->firstRecordOffset + (rmFileScan->pRMFileHandle->fileSubHeader->recordSize)*(rmFileScan->snIx);
-			pRec += offset;
+			pRec += offset;//偏移值计算
 
-			if ((pbitmap[byte] & (1 << bit)) != 0) {
-				if (SatisfyCondition(rmFileScan, pRec) == false) {
+			if ((pbitmap[byte] & (1 << bit)) != 0) {//当前插槽已经被使用
+				if (SatisfyCondition(rmFileScan, pRec) == false) {//不符合对应条件的直接跳过
 					continue;
 				}
 
@@ -144,11 +151,11 @@ RC GetNextRecInMem(RM_FileScan *rmFileScan, RM_Record *rec)
 				}
 				rec->rid.slotNum = rmFileScan->snIx;
 				rec->bValid = true;
-				rmFileScan->snIx++;
+				rmFileScan->snIx++;//更新要被扫描的页号
 				return SUCCESS;
 			}
 		}
-		rmFileScan->snIx = 0;
+		rmFileScan->snIx = 0;//扫描结束，将要被扫描的页号置为0
 	}
 	return RM_NOMORERECINMEM;
 }
@@ -163,6 +170,7 @@ bool SatisfyCondition(RM_FileScan *rmFileScan, char *pRec)
 		return true;
 	for (i = 0; i < rmFileScan->conNum; i++)
 	{
+		//根据类型不同进行不同处理
 		switch (rmFileScan->conditions[i].attrType) {
 		case ints:
 			if (rmFileScan->conditions[i].bLhsIsAttr == 1)
@@ -196,6 +204,7 @@ bool SatisfyCondition(RM_FileScan *rmFileScan, char *pRec)
 			break;
 		}
 
+		//根据比较符进行相应操作
 		bool flag = false;
 
 		switch (rmFileScan->conditions[i].compOp) {
@@ -299,29 +308,29 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec)
 	slotNum = rid->slotNum;
 	PF_PageHandle pfPageHandle;
 
-	rc = GetThisPage(&(fileHandle->pfFileHandle), pageNum, &pfPageHandle);
+	rc = GetThisPage(&(fileHandle->pfFileHandle), pageNum, &pfPageHandle);//找到页面
 
 	if (rc != SUCCESS) {
 		return rc;
 	}
 
-	rc = GetData(&pfPageHandle, &pBitmap);
+	rc = GetData(&pfPageHandle, &pBitmap);//定位数据区
 	if (rc != SUCCESS) {
 		return rc;
 	}
-	pBitmap += sizeof(RM_PageSubHeader);
+	pBitmap += sizeof(RM_PageSubHeader);//定位到位图所在位置
 	byte = slotNum / 8;
 	bit = slotNum % 8;
-	if ((pBitmap[byte] & (1 << bit)) == 0) {
+	if ((pBitmap[byte] & (1 << bit)) == 0) {//位图信息中该记录不存在
 		return RM_INVALIDRID;
 	}
 
-	rc = GetData(&pfPageHandle, &pRec);
+	rc = GetData(&pfPageHandle, &pRec);//定位数据区
 
 	if (rc != SUCCESS) {
 		return rc;
 	}
-	offset = fileHandle->fileSubHeader->firstRecordOffset + (fileHandle->fileSubHeader->recordSize)*slotNum;
+	offset = fileHandle->fileSubHeader->firstRecordOffset + (fileHandle->fileSubHeader->recordSize)*slotNum;//计算偏移值
 	pRec += offset;
 
 	if (rec->pData) {
@@ -329,11 +338,11 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec)
 	}
 
 	rec->pData = (char *)malloc(fileHandle->fileSubHeader->recordSize);
-	memcpy(rec->pData, pRec, fileHandle->fileSubHeader->recordSize);
+	memcpy(rec->pData, pRec, fileHandle->fileSubHeader->recordSize);//将记录信息数据指针复制到rec中
 
 	rec->rid.pageNum = pageNum;
 	rec->rid.slotNum = slotNum;
-	rec->bValid = true;
+	rec->bValid = true;//记录信息更新
 
 	rc = UnpinPage(&pfPageHandle);
 	if (rc != SUCCESS) {
@@ -344,8 +353,8 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec)
 
 RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid)
 {
-	PageNum pageNum = fileHandle->pageNum_FileHdr + 1;
-	PageNum pageCount = fileHandle->pfFileHandle.pFileSubHeader->pageCount;
+	PageNum pageNum = fileHandle->pageNum_FileHdr + 1;//控制页后第一页
+	PageNum pageCount = fileHandle->pfFileHandle.pFileSubHeader->pageCount;//当前文件总页数
 	SlotNum slotNum;
 	int byte, bit, offset;
 	char *pRec, *pBitmap, *pdata;
@@ -362,7 +371,7 @@ RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid)
 	PF_PageHandle pfPageHandle;
 	RC rc;
 
-	if (pageNum > pageCount) {
+	if (pageNum > pageCount) {//未找到已分配且有空闲的页面
 		rc = AllocatePage(&(fileHandle->pfFileHandle), &pfPageHandle);
 		if (rc != SUCCESS) {
 			return rc;
@@ -372,7 +381,7 @@ RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid)
 			return rc;
 		}
 	}
-	else {
+	else {//找到已分配的空闲页面
 		rc = GetThisPage(&(fileHandle->pfFileHandle), pageNum, &pfPageHandle);
 		if (rc != SUCCESS) {
 			return rc;
@@ -430,7 +439,7 @@ RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid)
 	if (rc != SUCCESS) {
 		return rc;
 	}
-
+	//更新RID数据
 	rid->pageNum = pageNum;
 	rid->slotNum = slotNum;
 	rid->bValid = true;
