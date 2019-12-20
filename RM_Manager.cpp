@@ -34,14 +34,16 @@ RC CloseScan(RM_FileScan * rmFileScan)
 	if (!rmFileScan->bOpen)
 		return RM_FSCLOSED;//扫描已关闭
 	rmFileScan->bOpen = false;
-	rmFileScan->conditions = NULL;
+	if (rmFileScan->conditions) {
+		delete[] rmFileScan->conditions;
+		rmFileScan->conditions = NULL;
+	}
 	rmFileScan->conNum = 0;
 	rmFileScan->pnLast = 0;
 	rmFileScan->snIx = 0;
 	rmFileScan->phIx = 0;
 	rmFileScan->N = 0;
-	//UnpinPage(&rmFileScan->PageHandle);//关闭文件扫描
-	delete[] rmFileScan->conditions;
+	
 	return SUCCESS;
 }
 
