@@ -156,7 +156,8 @@ RC DropDB(char *dbname) {
 		if (finder.IsDirectory() && !finder.IsDots())
 		{//处理文件夹
 			char subDir[200];
-			sprintf_s(subDir, "%s", finder.GetFilePath());
+			std::string dir = finder.GetFilePath();
+			sprintf_s(subDir, "%s", dir.c_str());
 			DropDB(subDir); //递归删除文件夹
 			RemoveDirectory(finder.GetFilePath());
 		}
@@ -172,7 +173,7 @@ RC DropDB(char *dbname) {
 RC OpenDB(char *dbname) {
 	SetCurrentDirectory(dbname);
 	int i, j;
-	if ((i = access("SYSTABLES", 0)) != 0 || (j = access("SYSCOLUMNS", 0)) != 0) {
+	if ((i = _access("SYSTABLES", 0)) != 0 || (j = _access("SYSCOLUMNS", 0)) != 0) {
 		return FAIL;
 	}
 	CHustBaseApp::pathvalue = true;
@@ -627,7 +628,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->rhsAttr.relName = new char[21];
-						strcpy(contmp->rhsAttr.relName, relName);
+						strcpy_s(contmp->rhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
 						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -805,7 +806,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->lhsAttr.relName = new char[21];
-						strcpy(contmp->lhsAttr.relName, relName);
+						strcpy_s(contmp->lhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
 						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -839,7 +840,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->rhsAttr.relName = new char[21];
-						strcpy(contmp->rhsAttr.relName, relName);
+						strcpy_s(contmp->rhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
 						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -873,7 +874,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->lhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->lhsAttr.relName = new char[21];
-						strcpy(contmp->lhsAttr.relName, relName);
+						strcpy_s(contmp->lhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpleft->tabName, contmp->lhsAttr.relName) == 0)
 						&& (strcmp(ctmpleft->attrName, contmp->lhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -884,7 +885,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				for (int j = 0; j < attrcount; j++) {//attrcount个属性逐一判断
 					if (contmp->rhsAttr.relName == NULL) {//当条件中未指定表名时，默认为relName
 						contmp->rhsAttr.relName = new char[21];
-						strcpy(contmp->rhsAttr.relName, relName);
+						strcpy_s(contmp->rhsAttr.relName, 21, relName);
 					}
 					if ((strcmp(ctmpright->tabName, contmp->rhsAttr.relName) == 0)
 						&& (strcmp(ctmpright->attrName, contmp->rhsAttr.attrName) == 0)) {//根据表名属性名找到对应属性
@@ -981,7 +982,7 @@ bool CanButtonClick() {//需要重新实现
 
 void toLowerString(std::string & s)
 {
-	for (int i = 0; i < s.length(); i++)
+	for (unsigned i = 0; i < s.length(); i++)
 	{
 		s[i] = tolower(s[i]);
 	}
@@ -1019,13 +1020,13 @@ void showSelectResult(SelResult & res, CEditArea * editArea)
 			case AttrType::ints:
 				memcpy(&intNum, res.res[i][j], sizeof(int));
 				rows[i][j] = new char[32];
-				sprintf(rows[i][j], "%d", intNum);
+				sprintf_s(rows[i][j], 32, "%d", intNum);
 				break;
 			case AttrType::floats:
 				memcpy(&floatNum, res.res[i][j], sizeof(float));
 				y = res.length[j];
 				rows[i][j] = new char[32];
-				sprintf(rows[i][j], "%f", floatNum);
+				sprintf_s(rows[i][j], 32, "%f", floatNum);
 				break;
 			case AttrType::chars:
 				rows[i][j] = new char[res.length[j]];

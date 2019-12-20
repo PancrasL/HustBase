@@ -407,7 +407,7 @@ RC singleConditionSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char
 				curRes->next_res->col_num = curRes->col_num;
 				for (int j = 0; j < curRes->col_num; j++)
 				{
-					strncpy(curRes->next_res->fields[i], curRes->fields[i], strlen(curRes->fields[i]));
+					strncpy_s(curRes->next_res->fields[i], curRes->fields[i], strlen(curRes->fields[i]));
 					curRes->next_res->type[i] = curRes->type[i];
 					curRes->next_res->offset[i] = curRes->offset[i];
 				}
