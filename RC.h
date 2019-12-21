@@ -29,6 +29,7 @@ typedef enum {
 	DB_NOT_EXIST,
 
 	TABLE_NOT_EXIST,
+	TABLE_EXIST,
 
 	SQL_SYNTAX
 }RC;

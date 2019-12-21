@@ -215,13 +215,12 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
 	if (rc != SUCCESS)
 		return rc;
-	//找到系统表中对应relName的记录
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
-			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
-			AfxMessageBox("存在同名的表");
-			return FAIL;
+			delete[] rectab.pData;
+			return TABLE_EXIST;
 		}
+		delete[] rectab.pData;
 	}
 
 	pData = new char[sizeof(SysTable)];
@@ -317,8 +316,10 @@ RC DropTable(char *relName) {
 		if (strcmp(relName, rectab.pData) == 0) {
 			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
 			DeleteRec(&rm_table, &(rectab.rid));
+			delete[] rectab.pData;
 			break;
 		}
+		delete[] rectab.pData;
 	}
 
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
@@ -333,6 +334,7 @@ RC DropTable(char *relName) {
 			DeleteRec(&rm_column, &(reccol.rid));
 			i++;
 		}
+		delete[] reccol.pData;
 	}
 
 	//关闭文件句柄
@@ -393,8 +395,10 @@ RC Insert(char *relName, int nValues, Value *values) {
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
 			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			delete[] rectab.pData;
 			break;
 		}
+		delete rectab.pData;
 	}
 
 	//判定是否为完全插入，如果不是，返回fail
@@ -421,12 +425,14 @@ RC Insert(char *relName, int nValues, Value *values) {
 				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
 				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
 				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
+				delete[] reccol.pData;
 				rc = GetNextRec(&FileScan, &reccol);
 				if (rc != SUCCESS)
 					break;
 			}
 			break;
 		}
+		delete[] reccol.pData;
 	}
 	ctmp = column;
 
@@ -498,8 +504,10 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
 			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			delete[] rectab.pData;
 			break;
 		}
+		delete[] rectab.pData;
 	}
 
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
@@ -520,12 +528,14 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
 				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
 				ctmp++;
+				delete[] reccol.pData;
 				rc = GetNextRec(&FileScan, &reccol);
 				if (rc != SUCCESS)
 					break;
 			}
 			break;
 		}
+		delete[] reccol.pData;
 	}
 
 	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
@@ -692,6 +702,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 		if (torf == 1) {
 			DeleteRec(&rm_data, &(recdata.rid));
 		}
+		delete[] recdata.pData;
 	}
 	delete[] column;
 
@@ -746,8 +757,10 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
 			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			delete[] rectab.pData;
 			break;
 		}
+		delete[] rectab.pData;
 	}
 
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
@@ -770,6 +783,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 				if ((strcmp(relName, ctmp->tabName) == 0) && (strcmp(attrName, ctmp->attrName) == 0)) {
 					cupdate = ctmp;//找到要更新数据 对应的属性
 				}
+				delete[] reccol.pData;
 				rc = GetNextRec(&FileScan, &reccol);
 				if (rc != SUCCESS)
 					break;
@@ -777,6 +791,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 			}
 			break;
 		}
+		delete[] reccol.pData;
 	}
 
 	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
@@ -943,6 +958,7 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 			memcpy(recdata.pData + cupdate->attrOffset, Value->data, cupdate->attrLength);
 			UpdateRec(&rm_data, &recdata);
 		}
+		delete[] recdata.pData;
 	}
 
 	delete[] column;
