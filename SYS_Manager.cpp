@@ -200,12 +200,29 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	RID rid;
 	int recordsize;//数据表的每条记录的大小
 	AttrInfo * attrtmp = attributes;
+	RM_FileScan FileScan;
+	RM_Record rectab;
+	int attrcount;
 
 	/*打开系统表文件并更新*/
 	rm_table.bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS)
 		return rc;
+
+	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
+	FileScan.bOpen = false;
+	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
+	if (rc != SUCCESS)
+		return rc;
+	//找到系统表中对应relName的记录
+	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
+		if (strcmp(relName, rectab.pData) == 0) {
+			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
+			AfxMessageBox("存在同名的表");
+			return FAIL;
+		}
+	}
 
 	pData = new char[sizeof(SysTable)];
 	memcpy(pData, relName, 21);
