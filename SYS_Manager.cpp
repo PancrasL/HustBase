@@ -57,6 +57,9 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½
 	case PF_FILEERR:
 		showMsg(editArea, "ÎÄ¼ş²»´æÔÚ");
 		break;
+	case TABLE_EXIST:
+		showMsg(editArea, "±íÒÑ´æÔÚ£¬ÎŞ·¨ÖØ¸´´´½¨");
+		break;
 	default:
 		showMsg(editArea, "¹¦ÄÜÎ´ÊµÏÖ");
 		break;
