@@ -8,10 +8,10 @@ using std::string;
 using std::vector;
 //从SYSTABLES和SYSCOLUMNS中获取的table元数据保存到此结构体中
 struct TableMetaData {
-	string tableName;		//表名
-	int attrNum;			//属性个数
-	vector<string> attrNames;//属性名
-	vector<AttrType> types;	//属性类型
+	string tableName;			//表名
+	int attrNum;				//属性个数
+	vector<string> attrNames;	//属性名
+	vector<AttrType> types;		//属性类型
 	vector<int> offsets;		//属性的偏移量
 	vector<int> lengths;		//属性值的长度
 	map<string, int> mp;		//属性名和下标的映射
@@ -94,7 +94,7 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 		}
 		else
 		{	//条件查询
-			//rc = singleConditionSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
+			rc = singleConditionSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
 		}
 	}
 	else if (nRelations > 1)
@@ -256,16 +256,16 @@ RC singleNoConditionSelect(int nSelAttrs, RelAttr ** selAttrs, int nRelations, c
 				curRes->next_res = NULL;
 			}
 
-			auto &resultRecord = curRes->res[curRes->row_num];	//该结构保存了查询结果集的每条记录的具体值，例如table拥有属性a,b,c，
-																//则第i条记录保存在curRes->res[i]下，第i条记录的属性a保存在curRes->res[i][0]，
+			auto &oneRecord = curRes->res[curRes->row_num];	//即将插入到结果集的一条记录，例如table拥有属性a,b,c，
+																//则第i条记录保存在curRes->res[i]下，第i条记录的属性a保存在curRes->res[i][0]，属性b保存在curRes->res[i][1]
 																//以a是int为例，属性a的值为curRes->res[i][0][0-3],即存放在4字节的buf中
 
-			resultRecord = new char*[nSelAttrs];				
+			oneRecord = new char*[nSelAttrs];
 			//将具体的属性值从record->pData中提取出来
 			for (int k = 0; k < nSelAttrs; k++) {
 				int attrIndex = tableMetaData.mp[realSelAttrs[k]];
-				resultRecord[k] = new char[tableMetaData.lengths[attrIndex]];
-				memcpy(resultRecord[k], record.pData + tableMetaData.offsets[attrIndex], tableMetaData.lengths[attrIndex]);
+				oneRecord[k] = new char[tableMetaData.lengths[attrIndex]];
+				memcpy(oneRecord[k], record.pData + tableMetaData.offsets[attrIndex], tableMetaData.lengths[attrIndex]);
 			}
 			curRes->row_num++;
 			delete[] record.pData;
@@ -278,6 +278,100 @@ RC singleNoConditionSelect(int nSelAttrs, RelAttr ** selAttrs, int nRelations, c
 	return SUCCESS;
 }
 
+RC singleConditionSelect(int nSelAttrs, RelAttr ** selAttrs, int nRelations, char ** relations, int nConditions, Condition * conditions, SelResult * res)
+{
+	RC rc;
+	//如果某个属性上有索引，则索引查询；否则，全文件扫描
+	if (false)
+	{ //此处判断索引情况，暂未实现
+
+	}
+	else {
+		/*获取table的元数据*/
+		TableMetaData tableMetaData;
+		rc = getTableMetaData(tableMetaData, relations[0]);
+		if (rc != SUCCESS)
+			return rc;
+
+		/*记录需要查询的属性*/
+		vector<string> realSelAttrs;
+		if (selAttrs[0]->relName == NULL && strcmp(selAttrs[0]->attrName, "*") == 0) {//全表查询，即select *
+			nSelAttrs = tableMetaData.attrNum;
+			realSelAttrs = tableMetaData.attrNames;
+		}
+		else {//部分查询
+			realSelAttrs.resize(nSelAttrs);
+			for (int k = 0; k < nSelAttrs; k++) {
+				realSelAttrs[k] = selAttrs[nSelAttrs - k - 1]->attrName;
+			}
+		}
+
+		/*初始化结果集*/
+		res->row_num = 0;
+		res->col_num = nSelAttrs;
+		res->next_res = NULL;
+		for (int k = 0; k < nSelAttrs; k++) {
+			int attrIndex = tableMetaData.mp[realSelAttrs[k]];
+			//属性名
+			strcpy_s(res->fields[k], tableMetaData.attrNames[attrIndex].c_str());
+			//属性长度
+			res->length[k] = tableMetaData.lengths[attrIndex];
+			//属性类型
+			res->type[k] = tableMetaData.types[attrIndex];
+		}
+
+		/*创建扫描条件，将查询条件Condition转换为记录扫描条件Con*/
+		Con *cons = new Con[nConditions];
+		for (int k = 0; k < nConditions; k++) {
+		
+		}
+
+		/*扫描记录，选择符合条件的记录*/
+		RM_Record record;
+		RM_FileHandle rm_data;
+		rm_data.bOpen = false;
+		rc = RM_OpenFile(relations[0], &rm_data);
+		if (rc != SUCCESS)
+			return rc;
+		RM_FileScan rm_fileScan;
+		rm_fileScan.bOpen = false;
+		rc = OpenScan(&rm_fileScan, &rm_data, nConditions, cons);
+		if (rc != SUCCESS)
+			return rc;
+
+		SelResult *curRes = res;
+		while (GetNextRec(&rm_fileScan, &record) == SUCCESS)
+		{
+			//当前结点已经保存100条记录时，新建结点
+			if (curRes->row_num >= 100) 
+			{ 
+				curRes->next_res = new SelResult(*curRes);
+
+				curRes = curRes->next_res;
+				curRes->row_num = 0;
+				curRes->next_res = NULL;
+			}
+
+			//将具体的属性值从record->pData中提取出来
+			auto &oneRecord = curRes->res[curRes->row_num];
+			oneRecord = new char*[nSelAttrs];
+			for (int k = 0; k < nSelAttrs; k++) {
+				int attrIndex = tableMetaData.mp[realSelAttrs[k]];
+				oneRecord[k] = new char[tableMetaData.lengths[attrIndex]];
+				memcpy(oneRecord[k], record.pData + tableMetaData.offsets[attrIndex], tableMetaData.lengths[attrIndex]);
+			}
+			curRes->row_num++;
+			delete[] record.pData;
+		}
+
+		/*释放资源*/
+		delete[] cons;
+		CloseScan(&rm_fileScan);
+		RM_CloseFile(&rm_data);
+
+		return SUCCESS;
+	}
+}
 //判断查询涉及的表是否都存在
 //输入参数
 //    nRelations: 表的个数
