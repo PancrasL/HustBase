@@ -3,36 +3,101 @@
 #include "RM_Manager.h"
 #include <map>
 #include <vector>
+
 using std::map;
 using std::string;
 using std::vector;
-//从SYSTABLES和SYSCOLUMNS中获取的table元数据保存到此结构体中
+/*自定义函数与结构*/
+
+//属性的元数据
+struct AttrMetaData {
+	string tableName;
+	string attrName;
+	AttrType type;
+	int length;
+	int offset;
+	AttrMetaData() {};
+	AttrMetaData(string _tableName, string _attrName, AttrType _type, int _length, int _offset)
+		:tableName(_tableName), attrName(_attrName), type(_type), length(_length), offset(_offset) {};
+};
+//table的元数据
 struct TableMetaData {
 	string tableName;			//表名
-	int attrNum;				//属性个数
-	vector<string> attrNames;	//属性名
-	vector<AttrType> types;		//属性类型
-	vector<int> offsets;		//属性的偏移量
-	vector<int> lengths;		//属性值的长度
-	map<string, int> mp;		//属性名和下标的映射
+	vector<AttrMetaData> attrInfo;	//属性信息
+	map<string, int> attrIndex;	//属性名和属性信息下标的映射
 };
-//获取table的元数据
-RC getTableMetaData(TableMetaData &tableMetaData, char *tableName);
-
-//单表无条件查询
-RC singleNoConditionSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res);
-
-//单表条件查询
-RC singleConditionSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res);
-
-//多表查询
-RC multiSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res);
-
-//递归获取多表查询结果
-RC recurSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res, int curTable, int *offsets, char *curResult);
-
 //判断涉及查询的表是否存在
 RC checkTable(int nRelations, char **relations);
+//获取table的元数据
+RC getTableMetaData(TableMetaData &tableMetaData, char *tableName);
+//获取某个table的某个attribute, 保存到info中
+RC getAttrInfo(const string &tableName, const string &attrName, map<string, TableMetaData> & tableMetaDatas, AttrMetaData &info) {
+	if (tableMetaDatas.count(tableName) == 0)//表不存在
+		return TABLE_NOT_EXIST;
+
+	TableMetaData &tMetaData = tableMetaDatas[tableName];
+	if (tMetaData.attrIndex.count(attrName) == 0)//属性不存在
+		return ATTR_NOT_EXIST;
+
+	int aIndex = tMetaData.attrIndex[attrName];
+	info = tMetaData.attrInfo[aIndex];
+
+	return SUCCESS;
+}
+//获取下一个笛卡尔积
+bool getNextDkr(vector<RM_FileHandle> &datas, vector<RM_FileScan> &scans, vector<RM_Record> &dkrRecords);
+//比较值
+template<typename T>
+bool compare(T a, T b, CompOp op) {
+	switch (op)
+	{
+	case CompOp::EQual:
+		return a == b;
+		break;
+	case CompOp::GEqual:
+		return a >= b;
+		break;
+	case CompOp::GreatT:
+		return a > b;
+		break;
+	case CompOp::LEqual:
+		return a <= b;
+		break;
+	case CompOp::LessT:
+		return a < b;
+		break;
+	case CompOp::NEqual:
+		return a != b;
+		break;
+	default:
+		return false;
+		break;
+	}
+}
+bool compareValue(const char *left, const char *right, AttrType type, CompOp op) {
+	switch (type)
+	{
+	case AttrType::ints: {
+		int a, b;
+		memcpy(&a, left, sizeof(int));
+		memcpy(&b, right, sizeof(int));
+		return compare(a, b, op);
+	}
+	case AttrType::floats: {
+		float a, b;
+		memcpy(&a, left, sizeof(int));
+		memcpy(&b, right, sizeof(int));
+		return compare(a, b, op);
+	}
+	case AttrType::chars: {
+		string a = left;
+		string b = right;
+		return compare(a, b, op);
+	}
+	default:
+		return false;
+	}
+}
 
 void Init_Result(SelResult * res) {
 	res->next_res = NULL;
@@ -64,45 +129,236 @@ RC Query(char * sql, SelResult * res) {
 	}
 
 	selects sel = sqlType->sstr.sel;
+	//判断查询涉及的表是否都存在
+	rc = checkTable(sel.nRelations, sel.relations);
+	if (rc != SUCCESS)
+		return rc;
 	rc = Select(sel.nSelAttrs, sel.selAttrs, sel.nRelations, sel.relations, sel.nConditions, sel.conditions, res);
 
 	return rc;
 }
 
-/*
-* 第一组参数表示查询涉及的属性
-* 第二组表示查询涉及的表
-* 第三组表示查询条件
-* 最后一个参数res用于返回查询结果集
-* 查询优化：优化查询过程，当查询涉及多个表时，设计高效的查询过程
-*/
 RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, int nConditions, Condition *conditions, SelResult * res)
 {
 	RC rc;
 
-	rc = checkTable(nRelations, relations);
-	if (rc != SUCCESS)
-	{
-		return rc;
-	}
-	/*分单表查询和多表查询*/
-	if (nRelations == 1)
-	{ //单表查询
-		if (nConditions == 0)
-		{  //无条件查询
-			rc = singleNoConditionSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
-		}
-		else
-		{	//条件查询
-			rc = singleConditionSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
-		}
-	}
-	else if (nRelations > 1)
-	{ //多表条件查询
-		//rc = multiSelect(nSelAttrs, selAttrs, nRelations, relations, nConditions, conditions, res);
+	/*获取涉及的表的元数据*/
+	map<string, TableMetaData> tableMetaDatas;
+	map<string, int> tableIndex;//表在relations中的下标
+	for (int i = 0; i < nRelations; i++) {
+		getTableMetaData(tableMetaDatas[relations[i]], relations[i]);
+		tableIndex[relations[i]] = i;
 	}
 
-	return rc;
+	/*打开nRelations个数据表*/
+	vector<RM_FileHandle> datas(nRelations);
+	for (int i = 0; i < nRelations; i++) {
+		datas[i].bOpen = false;
+		rc = RM_OpenFile(relations[i], &datas[i]);
+		if (rc != SUCCESS)
+			return rc;
+	}
+
+	/*获取selAttrs对应的属性信息*/
+	vector<AttrMetaData> selAttrInfo;
+	//全表查询
+	if (nSelAttrs == 1 && selAttrs[0]->relName == NULL && strcmp(selAttrs[0]->attrName, "*") == 0) {
+		for (int i = 0; i < nRelations; i++) {
+			selAttrInfo.insert(selAttrInfo.end(),tableMetaDatas[relations[i]].attrInfo.begin(), tableMetaDatas[relations[i]].attrInfo.end());
+		}
+	}
+	//部分查询
+	else {
+		selAttrInfo.resize(nSelAttrs);
+		for (int i = 0; i < nSelAttrs; i++) {
+			string relName = selAttrs[nSelAttrs -1 - i]->relName;
+			string attrName = selAttrs[nSelAttrs - 1 - i]->attrName;
+
+			rc = getAttrInfo(selAttrs[nSelAttrs - 1 - i]->relName, selAttrs[nSelAttrs - 1 - i]->attrName, tableMetaDatas, selAttrInfo[i]);
+			if (rc != SUCCESS)
+				return rc;
+		}
+	}
+	
+
+	/*采用笛卡尔积计算查询结果*/
+	bool hasEmptyTable = false;
+	vector<RM_FileScan> scans(nRelations);
+	vector<RM_Record> dkrRecords(nRelations);
+	for (int i = 0; i < nRelations; i++) {
+		scans[i].bOpen = false;
+		rc = OpenScan(&scans[i], &datas[i], 0, NULL);
+		if (rc != SUCCESS)
+			return rc;
+		rc = GetNextRec(&scans[i], &dkrRecords[i]);
+		if (rc != SUCCESS) {//存在空表
+			hasEmptyTable = true;
+			break;
+		}
+	}
+
+	int rowNum = 0;
+	vector<vector<char*> > result;
+	if (hasEmptyTable == false) {//若条件涉及的表中存在空表，则查询结果必为空
+		do {
+			//根据条件conditions逐一判断
+			bool isOK = true;
+			for (int i = 0; i < nConditions; i++) {
+				//左属性右值
+				if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 0) {
+					AttrMetaData leftAttrInfo;
+					rc = getAttrInfo(conditions[i].lhsAttr.relName, conditions[i].lhsAttr.attrName, tableMetaDatas, leftAttrInfo);
+					if (rc != SUCCESS)
+						return rc;
+
+					if (leftAttrInfo.type != conditions[i].rhsValue.type) {//类型不匹配
+						isOK = false;
+						break;
+					}
+
+					char *left, *right;
+					int tIndex = tableIndex[leftAttrInfo.tableName];
+					left = dkrRecords[tIndex].pData + leftAttrInfo.offset;
+					right = (char *)conditions[i].rhsValue.data;
+					if (compareValue(left, right, leftAttrInfo.type, conditions[i].op) == false) {//记录不符合筛选条件
+						isOK = false;
+						break;
+					}
+				}
+				//左值右属性
+				else if (conditions[i].bLhsIsAttr == 0 && conditions[i].bRhsIsAttr == 1) {
+					AttrMetaData rightAttrInfo;
+					rc = getAttrInfo(conditions[i].rhsAttr.relName, conditions[i].rhsAttr.attrName, tableMetaDatas, rightAttrInfo);
+					if (rc != SUCCESS)
+						return rc;
+
+					if (rightAttrInfo.type != conditions[i].lhsValue.type) {//类型不匹配
+						isOK = false;
+						break;
+					}
+
+					char *left, *right;
+					int tIndex = tableIndex[rightAttrInfo.tableName];
+					right = dkrRecords[tIndex].pData + rightAttrInfo.offset;
+					left = (char *)conditions[i].lhsValue.data;
+					if (compareValue(left, right, rightAttrInfo.type, conditions[i].op) == false) {//记录不符合筛选条件
+						isOK = false;
+						break;
+					}
+				}
+				//左右均属性
+				else if (conditions[i].bLhsIsAttr == 1 && conditions[i].bRhsIsAttr == 1) {
+					AttrMetaData leftAttrInfo, rightAttrInfo;
+
+					rc = getAttrInfo(conditions[i].lhsAttr.relName, conditions[i].lhsAttr.attrName, tableMetaDatas, leftAttrInfo);
+					if (rc != SUCCESS)
+						return rc;
+					rc = getAttrInfo(conditions[i].rhsAttr.relName, conditions[i].rhsAttr.attrName, tableMetaDatas, rightAttrInfo);
+					if (rc != SUCCESS)
+						return rc;
+
+					if (leftAttrInfo.type != rightAttrInfo.type) {//类型不匹配
+						isOK = false;
+						break;
+					}
+
+					char *left, *right;
+					int leftTableIndex = tableIndex[leftAttrInfo.tableName];
+					int rightTableIndex = tableIndex[rightAttrInfo.tableName];
+					left = dkrRecords[leftTableIndex].pData + leftAttrInfo.offset;
+					right = dkrRecords[rightTableIndex].pData + rightAttrInfo.offset;
+					if (compareValue(left, right, rightAttrInfo.type, conditions[i].op) == false) {//记录不符合筛选条件
+						isOK = false;
+						break;
+					}
+				}
+				conditions[i];
+			}
+			if (isOK) {//目前的记录满足了所有筛选条件
+				rowNum++;
+				vector<char *> newRecord(selAttrInfo.size());
+				for (int i = 0; i < selAttrInfo.size(); i++) {
+					newRecord[i] = new char[selAttrInfo[i].length];
+					int tIndex = tableIndex[selAttrInfo[i].tableName];
+					memcpy(newRecord[i], dkrRecords[tIndex].pData + selAttrInfo[i].offset, selAttrInfo[i].length);
+				}
+				result.push_back(newRecord);
+			}
+		} while (getNextDkr(datas, scans, dkrRecords) == true);
+	}
+
+	/*生成结果集*/
+	//拷贝属性元数据
+	res->col_num = selAttrInfo.size();
+	res->row_num = 0;
+	res->next_res = NULL;
+	for (int i = 0; i < selAttrInfo.size(); i++) {
+		//属性类型
+		res->type[i] = selAttrInfo[i].type;
+		//属性名
+		string attrName;
+		attrName = selAttrInfo[i].tableName + "->" + selAttrInfo[i].attrName;
+		strcpy(res->fields[i], attrName.c_str());
+		//属性长度
+		res->length[i] = selAttrInfo[i].length;
+	}
+	//拷贝属性值
+	SelResult *curRes = res;
+	for (int i = 0; i < result.size(); i++) {
+		if (curRes->row_num >= 100) {//超过100条记录后新建链表节点
+			curRes->next_res = new SelResult();
+
+			curRes->row_num = 0;
+			curRes->next_res = NULL;
+		}
+
+		curRes->res[curRes->row_num] = new char*[selAttrInfo.size()];
+		for (int j = 0; j < selAttrInfo.size(); j++) {
+			curRes->res[curRes->row_num][j] = result[i][j];
+		}
+		curRes->row_num++;
+	}
+	return SUCCESS;
+}
+
+//假设有3个表，每个表有3条记录，其初始记录编号为 0 0 0
+//每调用一次该函数，记录编号变化为 0 0 0 → 0 0 1 → 0 0 2 ... → 0 1 1 → 0 1 2 → ... → 3 3 3 → false
+//记录内容保存在dkrRecords中
+bool getNextDkr(vector<RM_FileHandle>& datas, vector<RM_FileScan>& scans, vector<RM_Record>& dkrRecords)
+{
+	RC rc;
+	int tableNum = scans.size();
+	int k = tableNum - 1;
+	while (k >= 0) {
+		rc = GetNextRec(&scans[k], &dkrRecords[k]);
+		if (rc == SUCCESS) {
+			if (k == tableNum - 1) {
+				return true;
+			}
+			for (int t = k + 1; t < tableNum; t++) {
+				CloseScan(&scans[t]);
+				OpenScan(&scans[t], &datas[t], 0, NULL);
+				GetNextRec(&scans[k], &dkrRecords[k]);
+			}
+			k = tableNum - 1;
+		}
+		else {
+			k--;
+		}
+	}
+	return false;
+}
+
+RC checkTable(int nRelations, char **relations)
+{
+	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
+		return DB_NOT_EXIST;
+	}
+	for (int i = 0; i < nRelations; i++) {
+		if (_access(relations[i], 0) == -1)
+			return TABLE_NOT_EXIST;
+	}
+	return SUCCESS;
 }
 
 RC getTableMetaData(TableMetaData & tableMetaData, char * tableName)
@@ -137,7 +393,8 @@ RC getTableMetaData(TableMetaData & tableMetaData, char * tableName)
 		return rc;
 
 	//获得属性个数
-	memcpy(&tableMetaData.attrNum, record.pData + sizeof(SysTable::tabName), sizeof(SysTable::attrCount));
+	int attrNum;
+	memcpy(&attrNum, record.pData + sizeof(SysTable::tabName), sizeof(SysTable::attrCount));
 
 	//释放资源
 	CloseScan(&rm_fileScan);
@@ -153,7 +410,7 @@ RC getTableMetaData(TableMetaData & tableMetaData, char * tableName)
 	if (rc != SUCCESS)
 		return rc;
 
-	for (int i = 0; i < tableMetaData.attrNum; i++)
+	for (int i = 0; i < attrNum; i++)
 	{
 		AttrType type;
 		int length;
@@ -174,219 +431,14 @@ RC getTableMetaData(TableMetaData & tableMetaData, char * tableName)
 		memcpy(&length, column + 46, sizeof(int));
 
 		//插入属性记录
-		tableMetaData.types.push_back(type);
-		tableMetaData.attrNames.push_back(attrName);
-		tableMetaData.offsets.push_back(offset);
-		tableMetaData.lengths.push_back(length);
-		tableMetaData.mp[attrName] = i;
+		tableMetaData.attrIndex[attrName] = i;
+		tableMetaData.attrInfo.push_back(AttrMetaData(tableName, attrName, type, length, offset));
 
 		delete[] record.pData;
 	}
 	CloseScan(&rm_fileScan);
 	RM_CloseFile(&rm_column);
 
-	return SUCCESS;
-}
-
-RC singleNoConditionSelect(int nSelAttrs, RelAttr ** selAttrs, int nRelations, char ** relations, int nConditions, Condition * conditions, SelResult * res)
-{
-	RC rc;
-	//如果某个属性上有索引，则索引查询；否则，全文件扫描
-	if (false)
-	{ //此处判断索引情况，暂未实现
-
-	}
-	else { //无索引，全表扫描
-		/*获取表的元数据*/
-		TableMetaData tableMetaData;
-		rc = getTableMetaData(tableMetaData, relations[0]);
-		if (rc != SUCCESS)
-			return rc;
-
-		/*记录需要查询的属性*/
-		vector<string> realSelAttrs;//需要查询的属性
-		if (selAttrs[0]->relName == NULL && strcmp(selAttrs[0]->attrName, "*") == 0) {//全表查询，即select *
-			nSelAttrs = tableMetaData.attrNum;
-			realSelAttrs = tableMetaData.attrNames;
-		}
-		else {//部分查询
-			realSelAttrs.resize(nSelAttrs);
-			for (int k = 0; k < nSelAttrs; k++) {
-				realSelAttrs[k] = selAttrs[nSelAttrs - k - 1]->attrName;
-			}
-		}
-
-		/*初始化结果集*/
-		res->row_num = 0;
-		res->col_num = nSelAttrs;
-		res->next_res = NULL;
-		for (int k = 0; k < nSelAttrs; k++) {
-			int attrIndex = tableMetaData.mp[realSelAttrs[k]];
-			//属性名
-			strcpy_s(res->fields[k], tableMetaData.attrNames[attrIndex].c_str());
-			//属性长度
-			res->length[k] = tableMetaData.lengths[attrIndex];
-			//属性类型
-			res->type[k] = tableMetaData.types[attrIndex];
-		}
-
-		/*扫描记录表，找出所有记录*/
-		RM_Record record;
-		RM_FileHandle rm_data;
-		rm_data.bOpen = false;
-		rc = RM_OpenFile(*relations, &rm_data);
-		if (rc != SUCCESS)
-			return rc;
-
-		RM_FileScan rm_fileScan;
-		rm_fileScan.bOpen = false;
-		rc = OpenScan(&rm_fileScan, &rm_data, 0, NULL);
-		if (rc != SUCCESS)
-			return rc;
-
-		SelResult *curRes = res;  //尾插法向链表中插入新结点
-		while (GetNextRec(&rm_fileScan, &record) == SUCCESS)
-		{
-			if (curRes->row_num >= 100) //每个节点最多记录100条记录
-			{ //当前结点已经保存100条记录时，新建结点
-				curRes->next_res = new SelResult(*curRes);
-
-				curRes = curRes->next_res;
-				curRes->row_num = 0;
-				curRes->next_res = NULL;
-			}
-
-			auto &oneRecord = curRes->res[curRes->row_num];	//即将插入到结果集的一条记录，例如table拥有属性a,b,c，
-																//则第i条记录保存在curRes->res[i]下，第i条记录的属性a保存在curRes->res[i][0]，属性b保存在curRes->res[i][1]
-																//以a是int为例，属性a的值为curRes->res[i][0][0-3],即存放在4字节的buf中
-
-			oneRecord = new char*[nSelAttrs];
-			//将具体的属性值从record->pData中提取出来
-			for (int k = 0; k < nSelAttrs; k++) {
-				int attrIndex = tableMetaData.mp[realSelAttrs[k]];
-				oneRecord[k] = new char[tableMetaData.lengths[attrIndex]];
-				memcpy(oneRecord[k], record.pData + tableMetaData.offsets[attrIndex], tableMetaData.lengths[attrIndex]);
-			}
-			curRes->row_num++;
-			delete[] record.pData;
-		}
-
-		/*释放资源*/
-		CloseScan(&rm_fileScan);
-		RM_CloseFile(&rm_data);
-	}
-	return SUCCESS;
-}
-
-RC singleConditionSelect(int nSelAttrs, RelAttr ** selAttrs, int nRelations, char ** relations, int nConditions, Condition * conditions, SelResult * res)
-{
-	RC rc;
-	//如果某个属性上有索引，则索引查询；否则，全文件扫描
-	if (false)
-	{ //此处判断索引情况，暂未实现
-
-	}
-	else {
-		/*获取table的元数据*/
-		TableMetaData tableMetaData;
-		rc = getTableMetaData(tableMetaData, relations[0]);
-		if (rc != SUCCESS)
-			return rc;
-
-		/*记录需要查询的属性*/
-		vector<string> realSelAttrs;
-		if (selAttrs[0]->relName == NULL && strcmp(selAttrs[0]->attrName, "*") == 0) {//全表查询，即select *
-			nSelAttrs = tableMetaData.attrNum;
-			realSelAttrs = tableMetaData.attrNames;
-		}
-		else {//部分查询
-			realSelAttrs.resize(nSelAttrs);
-			for (int k = 0; k < nSelAttrs; k++) {
-				realSelAttrs[k] = selAttrs[nSelAttrs - k - 1]->attrName;
-			}
-		}
-
-		/*初始化结果集*/
-		res->row_num = 0;
-		res->col_num = nSelAttrs;
-		res->next_res = NULL;
-		for (int k = 0; k < nSelAttrs; k++) {
-			int attrIndex = tableMetaData.mp[realSelAttrs[k]];
-			//属性名
-			strcpy_s(res->fields[k], tableMetaData.attrNames[attrIndex].c_str());
-			//属性长度
-			res->length[k] = tableMetaData.lengths[attrIndex];
-			//属性类型
-			res->type[k] = tableMetaData.types[attrIndex];
-		}
-
-		/*创建扫描条件，将查询条件Condition转换为记录扫描条件Con*/
-		Con *cons = new Con[nConditions];
-		for (int k = 0; k < nConditions; k++) {
-		
-		}
-
-		/*扫描记录，选择符合条件的记录*/
-		RM_Record record;
-		RM_FileHandle rm_data;
-		rm_data.bOpen = false;
-		rc = RM_OpenFile(relations[0], &rm_data);
-		if (rc != SUCCESS)
-			return rc;
-		RM_FileScan rm_fileScan;
-		rm_fileScan.bOpen = false;
-		rc = OpenScan(&rm_fileScan, &rm_data, nConditions, cons);
-		if (rc != SUCCESS)
-			return rc;
-
-		SelResult *curRes = res;
-		while (GetNextRec(&rm_fileScan, &record) == SUCCESS)
-		{
-			//当前结点已经保存100条记录时，新建结点
-			if (curRes->row_num >= 100) 
-			{ 
-				curRes->next_res = new SelResult(*curRes);
-
-				curRes = curRes->next_res;
-				curRes->row_num = 0;
-				curRes->next_res = NULL;
-			}
-
-			//将具体的属性值从record->pData中提取出来
-			auto &oneRecord = curRes->res[curRes->row_num];
-			oneRecord = new char*[nSelAttrs];
-			for (int k = 0; k < nSelAttrs; k++) {
-				int attrIndex = tableMetaData.mp[realSelAttrs[k]];
-				oneRecord[k] = new char[tableMetaData.lengths[attrIndex]];
-				memcpy(oneRecord[k], record.pData + tableMetaData.offsets[attrIndex], tableMetaData.lengths[attrIndex]);
-			}
-			curRes->row_num++;
-			delete[] record.pData;
-		}
-
-		/*释放资源*/
-		delete[] cons;
-		CloseScan(&rm_fileScan);
-		RM_CloseFile(&rm_data);
-
-		return SUCCESS;
-	}
-}
-//判断查询涉及的表是否都存在
-//输入参数
-//    nRelations: 表的个数
-//    relations: 指向表名数组的指针
-//当任意一个表不存在时，返回TABLE_NOT_EXIST
-//都存在，则返回SUCCESS
-RC checkTable(int nRelations, char **relations)
-{
-	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
-		return DB_NOT_EXIST;
-	}
-	for (int i = 0; i < nRelations; i++) {
-		if (_access(relations[i], 0) == -1)
-			return TABLE_NOT_EXIST;
-	}
 	return SUCCESS;
 }
 
