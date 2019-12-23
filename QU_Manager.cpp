@@ -163,7 +163,7 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 	vector<AttrMetaData> selAttrInfo;
 	//È«±í²éÑ¯
 	if (nSelAttrs == 1 && selAttrs[0]->relName == NULL && strcmp(selAttrs[0]->attrName, "*") == 0) {
-		for (int i = 0; i < nRelations; i++) {
+		for (int i = nRelations - 1; i >= 0; i--) {
 			selAttrInfo.insert(selAttrInfo.end(),tableMetaDatas[relations[i]].attrInfo.begin(), tableMetaDatas[relations[i]].attrInfo.end());
 		}
 	}
@@ -338,7 +338,9 @@ bool getNextDkr(vector<RM_FileHandle>& datas, vector<RM_FileScan>& scans, vector
 			for (int t = k + 1; t < tableNum; t++) {
 				CloseScan(&scans[t]);
 				OpenScan(&scans[t], &datas[t], 0, NULL);
-				GetNextRec(&scans[k], &dkrRecords[k]);
+				if (t != tableNum - 1) {
+					GetNextRec(&scans[t], &dkrRecords[t]);
+				}
 			}
 			k = tableNum - 1;
 		}
