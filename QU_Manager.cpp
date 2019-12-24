@@ -301,6 +301,7 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 		strcpy(res->fields[i], attrName.c_str());
 		//属性长度
 		res->length[i] = selAttrInfo[i].length;
+		res->offset[i] = selAttrInfo[i].offset;
 	}
 	//拷贝属性值
 	SelResult *curRes = res;

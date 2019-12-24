@@ -6,9 +6,10 @@
 #include <direct.h>
 #include <iostream>
 #include <conio.h>
+
+//update by zjh 20191224 解决GetNextRec前未申请空间问题
 int TableTest(char tabname[][20], int *tabnum, char colname[][20][20], int colnum[], AttrType coltype[][20], int collength[][20], int coloffset[][20], int iscolindex[][20], char indexname[][20][20], char *temppath)
 {
-
 	RM_FileHandle fileHandle, colfilehandle;
 	fileHandle.bOpen = 0;
 	colfilehandle.bOpen = 0;
@@ -38,35 +39,41 @@ int TableTest(char tabname[][20], int *tabnum, char colname[][20][20], int colnu
 	}
 	rc = RM_OpenFile((LPSTR)(LPCTSTR)table, &fileHandle);//去SYSTABLES表中获取表名
 	if (rc != SUCCESS) {
-		//AfxMessageBox("打开系统表文件失败");
+		// AfxMessageBox("打开系统表文件失败");
 		return -1;
 	}
 	rc = RM_OpenFile((LPSTR)(LPCTSTR)column, &colfilehandle);//去SYSCOLUMNS表中获取列名
 	if (rc != SUCCESS) {
-		//AfxMessageBox("打开系统列文件失败");
+		// AfxMessageBox("打开系统列文件失败");
 		return -1;
 	}
 	rc = OpenScan(&FileScan1, &fileHandle, 0, NULL);
 	if (rc != SUCCESS) {
-		//AfxMessageBox("初始化表文件扫描失败");
+		// AfxMessageBox("初始化表文件扫描失败");
 		return -1;
 	}
+	rec1.pData = new char[25];//25=SIZE_SYS_TABLE
+	memset(rec1.pData, 0, 25);
+	rec2.pData = new char[76];//76=SIZE_SYS_COLUMNS
+	memset(rec2.pData, 0, 76);
 	while (GetNextRec(&FileScan1, &rec1) == SUCCESS)
 	{
 		strcpy(tabname[i], rec1.pData);
 		condition.bLhsIsAttr = 1;
 		condition.bRhsIsAttr = 0;
-		condition.LattrLength = strlen(tabname[i]) + 1;
+		condition.LattrLength = strlen(tabname[i]);
+		condition.RattrLength = strlen(tabname[i]);
 		condition.LattrOffset = 0;
 		condition.attrType = chars;
 		condition.compOp = EQual;
 		condition.Rvalue = tabname[i];
 		rc = OpenScan(&FileScan2, &colfilehandle, 1, &condition);
 		if (rc != SUCCESS) {
-			AfxMessageBox("初始化列文件扫描失败");
+			// AfxMessageBox("初始化列文件扫描失败");
 			return -1;
 		}
-		while (GetNextRec(&FileScan2, &rec2) == SUCCESS)
+		RC rc;
+		while ((rc = GetNextRec(&FileScan2, &rec2)) == SUCCESS)
 		{
 			strcpy(colname[i][j], rec2.pData + 21);
 			memcpy(&coltype[i][j], rec2.pData + 42, sizeof(AttrType));
@@ -91,16 +98,18 @@ int TableTest(char tabname[][20], int *tabnum, char colname[][20][20], int colnu
 	*tabnum = i;
 	rc = RM_CloseFile(&fileHandle);
 	if (rc != SUCCESS) {
-		//AfxMessageBox("关闭系统表文件失败");
+		// AfxMessageBox("关闭系统表文件失败");
 		return -1;
 	}
 	rc = RM_CloseFile(&colfilehandle);
 	if (rc != SUCCESS) {
-		//AfxMessageBox("关闭系统列文件失败");
+		// AfxMessageBox("关闭系统列文件失败");
 		return -1;
 	}
 	return 1;
 }
+
+//update by zjh 20191224 解决GetNextRec前未申请空间、colType应提前初始化问题
 int TableContent(int *colNum, int *rowNum, AttrType colType[20], char unit[][20][100], char *dbname, char *tablename)
 {
 	RM_FileHandle fileHandle;
@@ -143,6 +152,7 @@ int TableContent(int *colNum, int *rowNum, AttrType colType[20], char unit[][20]
 	condition.bRhsIsAttr = 0;
 	condition.LattrOffset = 0;
 	condition.LattrLength = 20;
+	condition.RattrLength = 20;
 	condition.attrType = chars;
 	condition.compOp = EQual;
 	condition.Rvalue = (LPSTR)(LPCTSTR)tablename;
@@ -152,6 +162,7 @@ int TableContent(int *colNum, int *rowNum, AttrType colType[20], char unit[][20]
 		//AfxMessageBox("初始化文件扫描失败");
 		return -1;
 	}
+	rec.pData = new char[76];//76=SIZE_SYS_COLUMNS
 	rc = GetNextRec(&FileScan, &rec);
 	if (rc != SUCCESS)//点击的不是表名，不做显示处理
 	{
@@ -190,14 +201,19 @@ int TableContent(int *colNum, int *rowNum, AttrType colType[20], char unit[][20]
 		//AfxMessageBox("初始化文件扫描失败");
 		return -1;
 	}
+	if (!rec.pData) {
+		rec.pData = new char[76];//76=SIZE_SYS_COLUMNS
+	}
+	*colNum = colnum[i];
+	for (j = 0; j < colnum[i]; j++)
+	{
+		//memcpy(&colType[j],&(coltype[i][j]),sizeof(AttrType));
+		colType[j] = coltype[i][j];
+	}
 	while (GetNextRec(&FileScan, &rec) == SUCCESS)
 	{
-
-		*colNum = colnum[i];
 		for (j = 0; j < colnum[i]; j++)
 		{
-			//memcpy(&colType[j],&(coltype[i][j]),sizeof(AttrType));
-			colType[j] = coltype[i][j];
 			if (coltype[i][j] == chars)
 			{
 				char temp[21];
