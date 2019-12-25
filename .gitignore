@@ -1,3 +1,5 @@
 /.vs/
 /Debug/
 /.vscode/*
+/HustBase.vcxproj
+/ipch/*
