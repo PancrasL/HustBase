@@ -767,6 +767,9 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 	float floatleft, floatright;//临时 属性的值
 	AttrType attrtype;
 
+	//表不存在
+	if (_access(relName, 0) == -1)
+		return TABLE_NOT_EXIST;
 	//打开数据表,系统表，系统列文件
 	rm_data.bOpen = false;
 	rc = RM_OpenFile(relName, &rm_data);
@@ -805,11 +808,13 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
 	column = new SysColumn[attrcount]();
 	ctmp = column;
+	set<string> s;
 	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
 			for (int i = 0; i < attrcount; i++) {
 				memcpy(ctmp->tabName, reccol.pData, 21);
 				memcpy(ctmp->attrName, reccol.pData + 21, 21);
+				s.insert(ctmp->attrName);
 				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
 				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
 				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
@@ -826,7 +831,10 @@ RC Update(char *relName, char *attrName, Value *Value, int nConditions, Conditio
 		}
 		delete[] reccol.pData;
 	}
-
+	//列不存在
+	if (s.find(attrName) == s.end())
+		return TABLE_COLUMN_ERROR;
+	
 	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
 	FileScan.bOpen = false;
 	rc = OpenScan(&FileScan, &rm_data, 0, NULL);

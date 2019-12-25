@@ -164,14 +164,14 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 	//全表查询
 	if (nSelAttrs == 1 && selAttrs[0]->relName == NULL && strcmp(selAttrs[0]->attrName, "*") == 0) {
 		for (int i = nRelations - 1; i >= 0; i--) {
-			selAttrInfo.insert(selAttrInfo.end(),tableMetaDatas[relations[i]].attrInfo.begin(), tableMetaDatas[relations[i]].attrInfo.end());
+			selAttrInfo.insert(selAttrInfo.end(), tableMetaDatas[relations[i]].attrInfo.begin(), tableMetaDatas[relations[i]].attrInfo.end());
 		}
 	}
 	//部分查询
 	else {
 		selAttrInfo.resize(nSelAttrs);
 		for (int i = 0; i < nSelAttrs; i++) {
-			string relName = selAttrs[nSelAttrs -1 - i]->relName;
+			string relName = selAttrs[nSelAttrs - 1 - i]->relName;
 			string attrName = selAttrs[nSelAttrs - 1 - i]->attrName;
 
 			rc = getAttrInfo(selAttrs[nSelAttrs - 1 - i]->relName, selAttrs[nSelAttrs - 1 - i]->attrName, tableMetaDatas, selAttrInfo[i]);
@@ -179,7 +179,7 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 				return rc;
 		}
 	}
-	
+
 
 	/*采用笛卡尔积计算查询结果*/
 	bool hasEmptyTable = false;
@@ -295,13 +295,14 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 	for (int i = 0; i < selAttrInfo.size(); i++) {
 		//属性类型
 		res->type[i] = selAttrInfo[i].type;
-		//属性名
-		string attrName;
-		attrName = selAttrInfo[i].tableName + "->" + selAttrInfo[i].attrName;
-		strcpy(res->fields[i], attrName.c_str());
+		//属性偏移值
+		res->offset[i] = selAttrInfo[i].offset;
 		//属性长度
 		res->length[i] = selAttrInfo[i].length;
-		res->offset[i] = selAttrInfo[i].offset;
+		//属性名
+		string attrName;
+		attrName = selAttrInfo[i].tableName + "." + selAttrInfo[i].attrName;
+		strcpy(res->fields[i], selAttrInfo[i].attrName.c_str());
 	}
 	//拷贝属性值
 	SelResult *curRes = res;
@@ -311,9 +312,11 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 
 			curRes->row_num = 0;
 			curRes->next_res = NULL;
+
+			curRes = curRes->next_res;
 		}
 
-		curRes->res[curRes->row_num] = new char*[selAttrInfo.size()];
+		curRes->res[curRes->row_num] = new char*[res->col_num];
 		for (int j = 0; j < selAttrInfo.size(); j++) {
 			curRes->res[curRes->row_num][j] = result[i][j];
 		}
