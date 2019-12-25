@@ -6,6 +6,10 @@
 #include "HustBaseDoc.h"
 #include <iostream>
 #include <vector>
+#include <set>
+#include <string>
+using std::set;
+using std::string;
 bool isOpened = false;//±êÊ¶Êı¾İ¿âÊÇ·ñ´ò¿ª
 
 /*×Ô¶¨Òåº¯Êı*/
@@ -60,6 +64,8 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½
 	case TABLE_EXIST:
 		showMsg(editArea, "±íÒÑ´æÔÚ£¬ÎŞ·¨ÖØ¸´´´½¨");
 		break;
+	case TABLE_COLUMN_ERROR:
+		showMsg(editArea, "ÊôĞÔÃû¹ı³¤»òÊôĞÔÍ¬Ãû");
 	default:
 		showMsg(editArea, "¹¦ÄÜÎ´ÊµÏÖ");
 		break;
@@ -124,8 +130,7 @@ RC execute(char * sql) {
 		//ÅĞ¶ÏÎªexitÓï¾ä£¬¿ÉÒÔÓÉ´Ë½øĞĞÍË³ö²Ù×÷
 		break;
 	}
-	return SUCCESS;
-
+	return rc;
 }
 
 RC CreateDB(char *dbpath, char *dbname) {
@@ -169,19 +174,10 @@ RC DropDB(char *dbname) {
 			DeleteFile(finder.GetFilePath());
 		}
 	}
-	ret = RemoveDirectory(dbname);
-	return ret ? SUCCESS : FAIL;
+	return SUCCESS;
 }
 
 RC OpenDB(char *dbname) {
-	SetCurrentDirectory(dbname);
-	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
-		return DB_NOT_EXIST;
-	}
-	CHustBaseApp::pathvalue = true;
-	CHustBaseDoc *pDoc;
-	pDoc = CHustBaseDoc::GetDoc();
-	pDoc->m_pTreeView->PopulateTree();
 	isOpened = true;
 	return SUCCESS;
 }
@@ -207,24 +203,27 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	RM_Record rectab;
 	int attrcount;
 
+	//ÅĞ¶Ï±íÊÇ·ñ´æÔÚ
+	if (_access(relName, 0) != -1)
+		return TABLE_EXIST;
+
+	//ÅĞ¶Ï±íÃ÷ÊÇ·ñ¹ı³¤
+	if (strlen(relName) > 20)
+		return TABLE_NAME_ILLEGAL;
+	//ÅĞ¶ÏÊôĞÔÃûÊÇ·ñ·ûºÏÒªÇó
+	set<string> s;
+	for (int i = 0; i < attrCount; i++) {
+		if (s.find(attributes[i].attrName) != s.end())//´æÔÚÍ¬ÃûÊôĞÔ
+			return TABLE_COLUMN_ERROR;
+		s.insert(attributes[i].attrName);
+		if (strlen(attributes[i].attrName) > 20)
+			return TABLE_COLUMN_ERROR;
+	}
 	/*´ò¿ªÏµÍ³±íÎÄ¼ş²¢¸üĞÂ*/
 	rm_table.bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS)
 		return rc;
-
-	//Í¨¹ıgetdataº¯Êı»ñÈ¡ÏµÍ³±íĞÅÏ¢,µÃµ½µÄĞÅÏ¢±£´æÔÚrectabÖĞ
-	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
-	if (rc != SUCCESS)
-		return rc;
-	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
-		if (strcmp(relName, rectab.pData) == 0) {
-			delete[] rectab.pData;
-			return TABLE_EXIST;
-		}
-		delete[] rectab.pData;
-	}
 
 	pData = new char[sizeof(SysTable)];
 	memcpy(pData, relName, 21);
@@ -483,6 +482,10 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 	char *charleft, *charright;
 	float floatleft, floatright;//ÁÙÊ± ÊôĞÔµÄÖµ
 	AttrType attrtype;
+
+	//ÅĞ¶Ï±íÊÇ·ñ´æÔÚ
+	if (_access(relName, 0) != -1)
+		return TABLE_NOT_EXIST;
 
 	//´ò¿ªÊı¾İ±í,ÏµÍ³±í£¬ÏµÍ³ÁĞÎÄ¼ş
 	rm_data.bOpen = false;

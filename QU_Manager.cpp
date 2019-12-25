@@ -3,7 +3,7 @@
 #include "RM_Manager.h"
 #include <map>
 #include <vector>
-
+#include <string>
 using std::map;
 using std::string;
 using std::vector;
@@ -37,7 +37,7 @@ RC getAttrInfo(const string &tableName, const string &attrName, map<string, Tabl
 
 	TableMetaData &tMetaData = tableMetaDatas[tableName];
 	if (tMetaData.attrIndex.count(attrName) == 0)//ÊôÐÔ²»´æÔÚ
-		return ATTR_NOT_EXIST;
+		return FAIL;
 
 	int aIndex = tMetaData.attrIndex[attrName];
 	info = tMetaData.attrInfo[aIndex];
