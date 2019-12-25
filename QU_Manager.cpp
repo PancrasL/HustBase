@@ -276,33 +276,9 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 			if (isOK) {//目前的记录满足了所有筛选条件
 				vector<char *> newRecord(selAttrInfo.size());
 				for (int i = 0; i < selAttrInfo.size(); i++) {
+					newRecord[i] = new char[selAttrInfo[i].length];
 					int tIndex = tableIndex[selAttrInfo[i].tableName];
-					newRecord[i] = new char[20];
-					memset(newRecord[i], 0, 20);
-					switch (selAttrInfo[i].type)
-					{
-					case AttrType::ints:
-					{
-						int intNum;
-						memcpy(&intNum, dkrRecords[tIndex].pData + selAttrInfo[i].offset, sizeof(int));
-						sprintf_s(newRecord[i], 20, "%d", intNum);
-						break;
-					}
-					case AttrType::floats:
-					{
-						float floatNum;
-						memcpy(&floatNum, dkrRecords[tIndex].pData + selAttrInfo[i].offset, sizeof(float));
-						sprintf_s(newRecord[i], 20, "%f", floatNum);
-						break;
-					}
-					case AttrType::chars:
-					{
-						strcpy_s(newRecord[i], 20, dkrRecords[tIndex].pData + selAttrInfo[i].offset);
-						break;
-					}
-					default:
-						break;
-					}
+					memcpy(newRecord[i], dkrRecords[tIndex].pData + selAttrInfo[i].offset, selAttrInfo[i].length);
 				}
 				result.push_back(newRecord);
 			}
