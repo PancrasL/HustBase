@@ -203,8 +203,8 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	RM_Record rectab;
 	int attrcount;
 
-	//判断表是否存在
-	if (_access(relName, 0) != -1)
+	//表存在
+	if (_access(relName, 0) == 0)
 		return TABLE_EXIST;
 
 	//判断表明是否过长
@@ -295,7 +295,7 @@ RC DropTable(char *relName) {
 	int attrcount;//临时 属性数量，属性长度，属性偏移
 
 	//删除不不存在的表
-	if (_access(relName, 0) != -1)
+	if (_access(relName, 0) == -1)
 		return TABLE_NOT_EXIST;
 
 	/*删除数据表文件*/
@@ -372,30 +372,34 @@ RC Insert(char *relName, int nValues, Value *values) {
 	RM_Record rectab, reccol;
 	int attrcount;//临时 属性数量，属性长度，属性偏移
 
+	//判断表是否存在
+	if (_access(relName, 0) == -1)
+		return TABLE_NOT_EXIST;
+
 	//打开数据表,系统表，系统列文件
 	rm_data.bOpen = false;
 	rc = RM_OpenFile(relName, &rm_data);
 	if (rc != SUCCESS) {
-		AfxMessageBox("打开数据表文件失败");
+		//AfxMessageBox("打开数据表文件失败");
 		return rc;
 	}
 	rm_table.bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", &rm_table);
 	if (rc != SUCCESS) {
-		AfxMessageBox("打开系统表文件失败");
+		//AfxMessageBox("打开系统表文件失败");
 		return rc;
 	}
 	rm_column.bOpen = false;
 	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS) {
-		AfxMessageBox("打开系统列文件失败");
+		//AfxMessageBox("打开系统列文件失败");
 		return rc;
 	}
 	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
 	FileScan.bOpen = false;
 	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
 	if (rc != SUCCESS) {
-		AfxMessageBox("初始化文件扫描失败");
+		//AfxMessageBox("初始化文件扫描失败");
 		return rc;
 	}
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
@@ -408,16 +412,15 @@ RC Insert(char *relName, int nValues, Value *values) {
 		delete rectab.pData;
 	}
 
-	//判定是否为完全插入，如果不是，返回fail
+	//判断列数与表定义不一致
 	if (attrcount != nValues) {
-		AfxMessageBox("不是全纪录插入！");
-		return FAIL;
+		return FIELD_MISSING;
 	}
 	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
 	FileScan.bOpen = false;
 	rc = OpenScan(&FileScan, &rm_column, 0, NULL);
 	if (rc != SUCCESS) {
-		AfxMessageBox("初始化数据列文件扫描失败");
+		//AfxMessageBox("初始化数据列文件扫描失败");
 		return rc;
 	}
 	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
@@ -443,6 +446,12 @@ RC Insert(char *relName, int nValues, Value *values) {
 	}
 	ctmp = column;
 
+	//判断数据类型是否与表一致
+	for (int i = 0; i < nValues; i++) {
+		if (values[nValues - 1 - i].type != column[i].attrType)
+			return FIELD_TYPE_MISMATCH;
+	}
+
 	//向数据表中循环插入记录
 	value = new char[rm_data.fileSubHeader->recordSize];
 	values = values + nValues - 1;
@@ -458,17 +467,17 @@ RC Insert(char *relName, int nValues, Value *values) {
 	//关闭文件句柄
 	rc = RM_CloseFile(&rm_data);
 	if (rc != SUCCESS) {
-		AfxMessageBox("关闭数据表失败");
+		//AfxMessageBox("关闭数据表失败");
 		return rc;
 	}
 	rc = RM_CloseFile(&rm_table);
 	if (rc != SUCCESS) {
-		AfxMessageBox("关闭系统表失败");
+		//AfxMessageBox("关闭系统表失败");
 		return rc;
 	}
 	rc = RM_CloseFile(&rm_column);
 	if (rc != SUCCESS) {
-		AfxMessageBox("关闭系统列失败");
+		//AfxMessageBox("关闭系统列失败");
 		return rc;
 	}
 	return SUCCESS;
@@ -489,7 +498,7 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 	AttrType attrtype;
 
 	//判断表是否存在
-	if (_access(relName, 0) != -1)
+	if (_access(relName, 0) == -1)
 		return TABLE_NOT_EXIST;
 
 	//打开数据表,系统表，系统列文件
@@ -530,11 +539,13 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
 	column = new SysColumn[attrcount]();
 	ctmp = column;
+	set<string> s;
 	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
 			for (int i = 0; i < attrcount; i++) {
 				memcpy(ctmp->tabName, reccol.pData, 21);
 				memcpy(ctmp->attrName, reccol.pData + 21, 21);
+				s.insert(ctmp->attrName);
 				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
 				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
 				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
@@ -547,6 +558,17 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 			break;
 		}
 		delete[] reccol.pData;
+	}
+	//判断列是否存在
+	for (int i = 0; i < nConditions; i++) {
+		if (conditions[i].bLhsIsAttr) {
+			if (s.find(conditions[i].lhsAttr.attrName) == s.end())
+				return TABLE_COLUMN_ERROR;
+		}
+		if (conditions[i].bRhsIsAttr) {
+			if (s.find(conditions[i].rhsAttr.attrName) == s.end())
+				return TABLE_COLUMN_ERROR;
+		}
 	}
 
 	//通过getdata函数获取系统表信息,得到的信息保存在recdata中
