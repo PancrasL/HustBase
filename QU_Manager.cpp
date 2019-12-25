@@ -397,7 +397,7 @@ RC getTableMetaData(TableMetaData & tableMetaData, char * tableName)
 
 	//获得属性个数
 	int attrNum;
-	memcpy(&attrNum, record.pData + sizeof(SysTable::tabName), sizeof(SysTable::attrCount));
+	memcpy(&attrNum, record.pData + 21, sizeof(int));
 
 	//释放资源
 	CloseScan(&rm_fileScan);
