@@ -197,7 +197,6 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 		}
 	}
 
-	int rowNum = 0;
 	vector<vector<char*> > result;
 	if (hasEmptyTable == false) {//若条件涉及的表中存在空表，则查询结果必为空
 		do {
@@ -275,12 +274,35 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 				conditions[i];
 			}
 			if (isOK) {//目前的记录满足了所有筛选条件
-				rowNum++;
 				vector<char *> newRecord(selAttrInfo.size());
 				for (int i = 0; i < selAttrInfo.size(); i++) {
-					newRecord[i] = new char[selAttrInfo[i].length];
 					int tIndex = tableIndex[selAttrInfo[i].tableName];
-					memcpy(newRecord[i], dkrRecords[tIndex].pData + selAttrInfo[i].offset, selAttrInfo[i].length);
+					newRecord[i] = new char[20];
+					memset(newRecord[i], 0, 20);
+					switch (selAttrInfo[i].type)
+					{
+					case AttrType::ints:
+					{
+						int intNum;
+						memcpy(&intNum, dkrRecords[tIndex].pData + selAttrInfo[i].offset, sizeof(int));
+						sprintf_s(newRecord[i], 20, "%d", intNum);
+						break;
+					}
+					case AttrType::floats:
+					{
+						float floatNum;
+						memcpy(&floatNum, dkrRecords[tIndex].pData + selAttrInfo[i].offset, sizeof(float));
+						sprintf_s(newRecord[i], 20, "%f", floatNum);
+						break;
+					}
+					case AttrType::chars:
+					{
+						strcpy_s(newRecord[i], 20, dkrRecords[tIndex].pData + selAttrInfo[i].offset);
+						break;
+					}
+					default:
+						break;
+					}
 				}
 				result.push_back(newRecord);
 			}
@@ -300,8 +322,6 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 		//属性长度
 		res->length[i] = selAttrInfo[i].length;
 		//属性名
-		string attrName;
-		attrName = selAttrInfo[i].tableName + "." + selAttrInfo[i].attrName;
 		strcpy(res->fields[i], selAttrInfo[i].attrName.c_str());
 	}
 	//拷贝属性值

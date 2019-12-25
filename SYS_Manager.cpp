@@ -1041,57 +1041,18 @@ void showMsg(CEditArea * editArea, char * msg)
 void showSelectResult(SelResult & res, CEditArea * editArea)
 {
 	/*输出执行结果*/
-	int col_num = res.col_num;
-	int row_num = res.row_num;
-	char ** fields = new char*[col_num];
-	for (int i = 0; i < col_num; i++) {
+	char ** fields = new char*[res.col_num];
+	for (int i = 0; i < res.col_num; i++) {
 		fields[i] = new char[20];
 		memcpy(fields[i], res.fields[i], 20);
 	}
-	char *** rows = new char**[row_num];
-	for (int i = 0; i < row_num; i++) {
-		rows[i] = new char*[col_num];
-		for (int j = 0; j < col_num; j++) {
-			AttrType type = res.type[j];
-			int intNum;
-			float floatNum;
-			int y;
-			switch (type)
-			{
-			case AttrType::ints:
-				memcpy(&intNum, res.res[i][j], sizeof(int));
-				rows[i][j] = new char[32];
-				sprintf_s(rows[i][j], 32, "%d", intNum);
-				break;
-			case AttrType::floats:
-				memcpy(&floatNum, res.res[i][j], sizeof(float));
-				y = res.length[j];
-				rows[i][j] = new char[32];
-				sprintf_s(rows[i][j], 32, "%f", floatNum);
-				break;
-			case AttrType::chars:
-				rows[i][j] = new char[res.length[j]];
-				memcpy(rows[i][j], res.res[i][j], res.length[j]);
-				break;
-			default:
-				break;
-			}
-
-		}
-	}
-	editArea->ShowSelResult(col_num, row_num, fields, rows);
+	editArea->ShowSelResult(res.col_num, res.row_num, fields, res.res);
 
 	/*释放动态分配的空间*/
-	for (int i = 0; i < col_num; i++) {
+	for (int i = 0; i < res.col_num; i++) {
 		delete[] fields[i];
 	}
 	delete[] fields;
-	for (int i = 0; i < row_num; i++) {
-		for (int j = 0; j < col_num; j++) {
-			delete[] rows[i][j];
-		}
-		delete[] rows[i];
-	}
-	delete[] rows;
+
 	Destory_Result(&res);
 }
