@@ -210,13 +210,14 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	//判断表明是否过长
 	if (strlen(relName) > 20)
 		return TABLE_NAME_ILLEGAL;
+
 	//判断属性名是否符合要求
 	set<string> s;
 	for (int i = 0; i < attrCount; i++) {
 		if (s.find(attributes[i].attrName) != s.end())//存在同名属性
 			return TABLE_COLUMN_ERROR;
 		s.insert(attributes[i].attrName);
-		if (strlen(attributes[i].attrName) > 20)
+		if (strlen(attributes[i].attrName) > 10)
 			return TABLE_COLUMN_ERROR;
 	}
 	/*打开系统表文件并更新*/
@@ -292,6 +293,10 @@ RC DropTable(char *relName) {
 	RM_FileScan FileScan;
 	RM_Record rectab, reccol;
 	int attrcount;//临时 属性数量，属性长度，属性偏移
+
+	//删除不不存在的表
+	if (_access(relName, 0) != -1)
+		return TABLE_NOT_EXIST;
 
 	/*删除数据表文件*/
 	tmp.Remove((LPCTSTR)relName);
