@@ -31,15 +31,40 @@ RC checkTable(int nRelations, char **relations);
 //获取table的元数据
 RC getTableMetaData(TableMetaData &tableMetaData, char *tableName);
 //获取某个table的某个attribute, 保存到info中
-RC getAttrInfo(const string &tableName, const string &attrName, map<string, TableMetaData> & tableMetaDatas, AttrMetaData &info) {
-	if (tableMetaDatas.count(tableName) == 0)//表不存在
+RC getAttrInfo(const char *tableName, const char *attrName, map<string, TableMetaData> & tableMetaDatas, AttrMetaData &info) {
+	string s_relName, s_attrName;
+	s_attrName = attrName;
+	if (tableName == NULL) {//表名为空
+		auto it = tableMetaDatas.begin();
+		bool findTable = false;
+		while (it != tableMetaDatas.end()) {
+			//遍历所有属性
+			for (int i = 0; i < it->second.attrInfo.size(); i++) {
+				if (it->second.attrInfo[i].attrName == attrName) {
+					s_relName = it->first;
+					findTable = true;
+					break;
+				}
+			}
+			if (findTable)
+				break;
+			it++;
+		}
+		if (!findTable)
+			return FAIL;
+	}
+	else {//表明不为空
+		s_relName = tableName;
+	}
+
+	if (tableMetaDatas.count(s_relName) == 0)//表不存在
 		return TABLE_NOT_EXIST;
 
-	TableMetaData &tMetaData = tableMetaDatas[tableName];
-	if (tMetaData.attrIndex.count(attrName) == 0)//属性不存在
+	TableMetaData &tMetaData = tableMetaDatas[s_relName];
+	if (tMetaData.attrIndex.count(s_attrName) == 0)//属性不存在
 		return FAIL;
 
-	int aIndex = tMetaData.attrIndex[attrName];
+	int aIndex = tMetaData.attrIndex[s_attrName];
 	info = tMetaData.attrInfo[aIndex];
 
 	return SUCCESS;
@@ -171,9 +196,6 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 	else {
 		selAttrInfo.resize(nSelAttrs);
 		for (int i = 0; i < nSelAttrs; i++) {
-			string relName = selAttrs[nSelAttrs - 1 - i]->relName;
-			string attrName = selAttrs[nSelAttrs - 1 - i]->attrName;
-
 			rc = getAttrInfo(selAttrs[nSelAttrs - 1 - i]->relName, selAttrs[nSelAttrs - 1 - i]->attrName, tableMetaDatas, selAttrInfo[i]);
 			if (rc != SUCCESS)
 				return rc;
