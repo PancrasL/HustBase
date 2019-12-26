@@ -153,6 +153,10 @@ RC CreateDB(char *dbpath, char *dbname) {
 }
 
 RC DropDB(char *dbname) {
+	SetCurrentDirectory(dbname);
+	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
+		return DB_NOT_EXIST;
+	}
 	BOOL ret = TRUE;
 	CFileFind finder;
 	CString path;
@@ -178,6 +182,10 @@ RC DropDB(char *dbname) {
 }
 
 RC OpenDB(char *dbname) {
+	SetCurrentDirectory(dbname);
+	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
+		return DB_NOT_EXIST;
+	}
 	isOpened = true;
 	return SUCCESS;
 }
@@ -370,7 +378,7 @@ RC Insert(char *relName, int nValues, Value *values) {
 	SysColumn *column, *ctmp;
 	RM_FileScan FileScan;
 	RM_Record rectab, reccol;
-	int attrcount;//临时 属性数量，属性长度，属性偏移
+	int attrcount = -1;
 
 	//判断表是否存在
 	if (_access(relName, 0) == -1)
@@ -406,10 +414,8 @@ RC Insert(char *relName, int nValues, Value *values) {
 	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
 		if (strcmp(relName, rectab.pData) == 0) {
 			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
-			delete[] rectab.pData;
 			break;
 		}
-		delete rectab.pData;
 	}
 
 	//判断列数与表定义不一致

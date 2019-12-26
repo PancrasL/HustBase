@@ -199,20 +199,15 @@ void CHustBaseApp::OnOpenDB()
 	if (targetLocation != NULL) {
 		SHGetPathFromIDList(targetLocation, dbName);
 	}
-
-	SetCurrentDirectory(dbName);
-	if (_access("SYSTABLES", 0) == -1 || _access("SYSCOLUMNS", 0) == -1) {
-		return ;
+	rc = OpenDB(dbName);
+	if (rc != SUCCESS) {
+		AfxMessageBox("打开的不是数据库");
+		return;
 	}
 	CHustBaseApp::pathvalue = true;
 	CHustBaseDoc *pDoc;
 	pDoc = CHustBaseDoc::GetDoc();
 	pDoc->m_pTreeView->PopulateTree();
-	rc = OpenDB(dbName);
-	if (rc == FAIL) {
-		AfxMessageBox("打开的不是数据库");
-		return;
-	}
 }
 
 void CHustBaseApp::OnDropDb()
@@ -238,6 +233,7 @@ void CHustBaseApp::OnDropDb()
 	dbName = targetPath;
 	rc = DropDB(dbName);
 	if (rc != SUCCESS) {
+		AfxMessageBox("删除的不是数据库");
 		return;
 	}
 }
