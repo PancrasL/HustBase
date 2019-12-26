@@ -1,11 +1,11 @@
 #include "stdafx.h"
 #include "IX_Manager.h"
 int threshold;
-RC CreateIndex(char * fileName, AttrType attrType, int attrLength) {
+RC CreateIndex(const char * fileName, AttrType attrType, int attrLength) {
 	CreateFile(fileName);
 
 	PF_FileHandle fileHandle;
-	openFile(fileName, &fileHandle);
+	openFile((char *)(void *)fileName, &fileHandle);
 
 	PF_PageHandle firstPageHandle;
 	AllocatePage(&fileHandle, &firstPageHandle);
@@ -36,9 +36,9 @@ RC CreateIndex(char * fileName, AttrType attrType, int attrLength) {
 	return SUCCESS;
 }
 
-RC OpenIndex(char *fileName, IX_IndexHandle *indexHandle) {
+RC OpenIndex(const char *fileName, IX_IndexHandle *indexHandle) {
 	RC rc;
-	if ((rc = openFile(fileName, &indexHandle->fileHandle)) != SUCCESS) {
+	if ((rc = openFile((char *)(void *)fileName, &indexHandle->fileHandle)) != SUCCESS) {
 		return rc;
 	}
 
