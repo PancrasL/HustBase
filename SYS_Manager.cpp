@@ -550,94 +550,94 @@ RC DropIndex(char *indexName) {
 }
 
 RC Insert(char *relName, int nValues, Value *values) {
-	RM_FileHandle rm_data, rm_table, rm_column;
-	char *value;//读取数据表信息
-	RID rid;
 	RC rc;
-	SysColumn *column, *ctmp;
-	RM_FileScan FileScan;
-	RM_Record rectab, reccol;
-	int attrcount = -1;
-
-	//判断表是否存在
+	/*判断表是否存在*/
 	if (_access(relName, 0) == -1)
 		return TABLE_NOT_EXIST;
 
-	//打开数据表,系统表，系统列文件
-	rm_data.bOpen = false;
-	rc = RM_OpenFile(relName, &rm_data);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("打开数据表文件失败");
-		return rc;
-	}
+	/*扫描SYSTABLES获得表的属性个数*/
+	RM_FileHandle rm_table;
 	rm_table.bOpen = false;
 	rc = RM_OpenFile("SYSTABLES", &rm_table);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("打开系统表文件失败");
+	if (rc != SUCCESS)
 		return rc;
-	}
-	rm_column.bOpen = false;
-	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("打开系统列文件失败");
-		return rc;
-	}
-	//通过getdata函数获取系统表信息,得到的信息保存在rectab中
-	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, &rm_table, 0, NULL);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("初始化文件扫描失败");
-		return rc;
-	}
-	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
-	while (GetNextRec(&FileScan, &rectab) == SUCCESS) {
-		if (strcmp(relName, rectab.pData) == 0) {
-			memcpy(&attrcount, rectab.pData + 21, sizeof(int));
-			break;
-		}
-	}
 
-	//判断列数与表定义不一致
+	Con con;
+	con.attrType = chars;
+	con.bLhsIsAttr = 1;
+	con.LattrOffset = 0;
+	con.LattrLength = strlen(relName) + 1;
+	con.compOp = EQual;
+	con.bRhsIsAttr = 0;
+	con.Rvalue = relName;
+
+	RM_FileScan rm_fileScan;
+	RM_Record record;
+	rm_fileScan.bOpen = false;
+	rc = OpenScan(&rm_fileScan, &rm_table, 1, &con);
+	if (rc != SUCCESS)
+		return rc;
+	rc = GetNextRec(&rm_fileScan, &record);
+	if (rc != SUCCESS)
+		return rc;
+
+	int attrcount = 0;
+	memcpy(&attrcount, record.pData + 21, sizeof(int));
+	CloseScan(&rm_fileScan);
+	RM_CloseFile(&rm_table);
+
+	//列数与表定义不一致
 	if (attrcount != nValues) {
 		return FIELD_MISSING;
 	}
-	//通过getdata函数获取系统列信息,得到的信息保存在reccol中
-	FileScan.bOpen = false;
-	rc = OpenScan(&FileScan, &rm_column, 0, NULL);
+
+	/*获取系统列信息*/
+	RM_FileHandle rm_column;
+	rm_column.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &rm_column);
 	if (rc != SUCCESS) {
-		//AfxMessageBox("初始化数据列文件扫描失败");
 		return rc;
 	}
-	//循环查找表名为relName对应的系统表中的记录,并将记录信息保存于rectab中
-	//根据之前读取的系统表中信息，读取属性信息，结果保存在ctmp中
+	rc = OpenScan(&rm_fileScan, &rm_column, 0, NULL);
+	if (rc != SUCCESS) {
+		return rc;
+	}
+	SysColumn * column;
 	column = new SysColumn[attrcount]();
-	ctmp = column;
-	while (GetNextRec(&FileScan, &reccol) == SUCCESS) {
+	RM_Record reccol;
+	while (GetNextRec(&rm_fileScan, &reccol) == SUCCESS) {
 		if (strcmp(relName, reccol.pData) == 0) {//找到表名为relName的第一个记录，依次读取attrcount个记录
-			for (int i = 0; i < attrcount; i++, ctmp++) {
-				memcpy(ctmp->tabName, reccol.pData, 21);
-				memcpy(ctmp->attrName, reccol.pData + 21, 21);
-				memcpy(&(ctmp->attrType), reccol.pData + 42, sizeof(AttrType));
-				memcpy(&(ctmp->attrLength), reccol.pData + 42 + sizeof(AttrType), sizeof(int));
-				memcpy(&(ctmp->attrOffset), reccol.pData + 42 + sizeof(int) + sizeof(AttrType), sizeof(int));
-				delete[] reccol.pData;
-				rc = GetNextRec(&FileScan, &reccol);
+			for (int i = 0; i < attrcount; i++) {
+				memcpy(column[i].tabName, reccol.pData, 21);
+				memcpy(column[i].attrName, reccol.pData + 21, 21);
+				memcpy(&(column[i].attrType), reccol.pData + 42, sizeof(AttrType));
+				memcpy(&(column[i].attrLength), reccol.pData + 46, sizeof(int));
+				memcpy(&(column[i].attrOffset), reccol.pData + 50, sizeof(int));
+				rc = GetNextRec(&rm_fileScan, &reccol);
 				if (rc != SUCCESS)
 					break;
 			}
 			break;
 		}
-		delete[] reccol.pData;
 	}
-	ctmp = column;
-
+	CloseScan(&rm_fileScan);
+	RM_CloseFile(&rm_column);
 	//判断数据类型是否与表一致
 	for (int i = 0; i < nValues; i++) {
 		if (values[nValues - 1 - i].type != column[i].attrType)
 			return FIELD_TYPE_MISMATCH;
 	}
 
-	//向数据表中循环插入记录
+	/*向数据表中循环插入记录*/
+	RM_FileHandle rm_data;
+	rm_data.bOpen = false;
+	rc = RM_OpenFile(relName, &rm_data);
+	if (rc != SUCCESS) {
+		return rc;
+	}
+	char * value;
+	auto ctmp = column;
+	RID rid;
 	value = new char[rm_data.fileSubHeader->recordSize];
 	values = values + nValues - 1;
 	for (int i = 0; i < nValues; i++, values--, ctmp++) {
@@ -648,23 +648,7 @@ RC Insert(char *relName, int nValues, Value *values) {
 	delete[] value;
 
 	delete[] column;
-
-	//关闭文件句柄
-	rc = RM_CloseFile(&rm_data);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("关闭数据表失败");
-		return rc;
-	}
-	rc = RM_CloseFile(&rm_table);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("关闭系统表失败");
-		return rc;
-	}
-	rc = RM_CloseFile(&rm_column);
-	if (rc != SUCCESS) {
-		//AfxMessageBox("关闭系统列失败");
-		return rc;
-	}
+	RM_CloseFile(&rm_data);
 	return SUCCESS;
 }
 
