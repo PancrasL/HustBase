@@ -66,8 +66,12 @@ void ExecuteAndMessage(char * sql, CEditArea* editArea) {//¸ù¾İÖ´ĞĞµÄÓï¾äÀàĞÍÔÚ½
 		break;
 	case TABLE_COLUMN_ERROR:
 		showMsg(editArea, "ÊôĞÔÃû¹ı³¤»òÊôĞÔÍ¬Ãû");
+		break;
+	case DB_NOT_EXIST:
+		showMsg(editArea, "Êı¾İ¿â²»´æÔÚ");
+		break;
 	default:
-		showMsg(editArea, "¹¦ÄÜÎ´ÊµÏÖ");
+		showMsg(editArea, "´íÎó");
 		break;
 	}
 }
@@ -362,153 +366,129 @@ RC DropTable(char *relName) {
 RC CreateIndex(char *indexName, char *relName, char *attrName) {
 	//ĞŞ¸ÄÊôĞÔĞÅÏ¢£¬ÉèÖÃË÷Òı×Ö¶ÎÎª´æÔÚË÷Òı
 	RC rc;
-	RM_FileHandle *colHandle;
-	RM_FileScan *fileScan = NULL;
-	RM_Record *colRec = NULL;
-
-	colHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
-	colHandle->bOpen = false;
-	fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
-	fileScan->bOpen = false;
-
+	
+	RM_Record colRec;
 
 	//´ò¿ªÏµÍ³ÁĞÎÄ¼ş
-	rc = RM_OpenFile("SYSCOLUMNS", colHandle);
-	if (rc != SUCCESS)
-	{
-		return rc;
-	}
+	RM_FileHandle colHandle;
+	colHandle.bOpen = false;
+	rc = RM_OpenFile("SYSCOLUMNS", &colHandle);
+	CHECK_RC(rc);
 
 	//ÉèÖÃÉ¨ÃèÌõ¼ş
-	Con *conditions = NULL;
-	conditions = (Con *)malloc(sizeof(Con) * 2);
-	(*conditions).attrType = chars;
-	(*conditions).compOp = EQual;
-	(*conditions).bLhsIsAttr = 1;
-	(*conditions).LattrLength = 21;
-	(*conditions).LattrOffset = 0;
-	(*conditions).bRhsIsAttr = 0;
-	(*conditions).Rvalue = relName;
+	Con conditions[2];
+	conditions[0].attrType = chars;
+	conditions[0].compOp = EQual;
+	conditions[0].bLhsIsAttr = 1;
+	conditions[0].LattrLength = 21;
+	conditions[0].LattrOffset = 0;
+	conditions[0].bRhsIsAttr = 0;
+	conditions[0].Rvalue = relName;
 
-	(conditions + 1)->attrType = chars;
-	(conditions + 1)->compOp = EQual;
-	(conditions + 1)->bLhsIsAttr = 1;
-	(conditions + 1)->LattrLength = 21;
-	(conditions + 1)->LattrOffset = 21;
-	(conditions + 1)->bRhsIsAttr = 0;
-	(conditions + 1)->Rvalue = attrName;
+	conditions[1].attrType = chars;
+	conditions[1].compOp = EQual;
+	conditions[1].bLhsIsAttr = 1;
+	conditions[1].LattrLength = 21;
+	conditions[1].LattrOffset = 21;
+	conditions[1].bRhsIsAttr = 0;
+	conditions[1].Rvalue = attrName;
+	RM_FileScan fileScan;
+	fileScan.bOpen = false;
+	OpenScan(&fileScan, &colHandle, 2, conditions);
 
-	OpenScan(fileScan, colHandle, 2, conditions);
-
-	colRec = (RM_Record *)malloc(sizeof(RM_Record));
-	rc = GetNextRec(fileScan, colRec);
+	rc = GetNextRec(&fileScan, &colRec);
 	if (rc != SUCCESS)
 	{
 		return rc;
 	}
 
-	if (*(colRec->pData + 42 + 3 * sizeof(int)) != '0')
+	if (*(colRec.pData + 42 + 3 * sizeof(int)) != '0')
 	{
 		return FAIL;
 	}
 
-	*(colRec->pData + 42 + 3 * sizeof(int)) = '1';   //ÉèÖÃË÷Òı±êÊ¶Îª1
-	memset(colRec->pData + 42 + 3 * sizeof(int) + sizeof(char), '\0', 21);
-	memcpy(colRec->pData + 42 + 3 * sizeof(int) + sizeof(char), indexName, strlen(indexName));
+	*(colRec.pData + 42 + 3 * sizeof(int)) = '1';   //ÉèÖÃË÷Òı±êÊ¶Îª1
+	memset(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), '\0', 21);
+	memcpy(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), indexName, strlen(indexName));
 
 	//¸üĞÂÏµÍ³ÁĞÎÄ¼ş
-	UpdateRec(colHandle, colRec);
+	UpdateRec(&colHandle, &colRec);
 
 	//¹Ø±ÕÉ¨Ãè¼°ÏµÍ³ÁĞÎÄ¼ş
-	CloseScan(fileScan); free(fileScan);
-	RM_CloseFile(colHandle); free(colHandle);
-	free(conditions);
-
+	CloseScan(&fileScan);
+	RM_CloseFile(&colHandle);
 
 	//´´½¨²¢´ò¿ªË÷ÒıÎÄ¼ş
-	AttrType *attrType = NULL;
-	attrType = (AttrType *)malloc(sizeof(AttrType));
-	memcpy(attrType, colRec->pData + 42, sizeof(int));
+	AttrType attrType;
+	memcpy(&attrType, colRec.pData + 42, sizeof(int));
 
 	//´´½¨Ë÷ÒıÎÄ¼ş
 	int length;
-	memcpy(&length, colRec->pData + 42 + sizeof(int), sizeof(int));
-	CreateIndex(indexName, *attrType, length);
-	free(attrType);
-
+	memcpy(&length, colRec.pData + 42 + sizeof(int), sizeof(int));
+	CreateIndex(indexName, attrType, length);
 
 	//´ò¿ªË÷ÒıÎÄ¼ş
-	IX_IndexHandle *indexHandle = NULL;
-
-	indexHandle = (IX_IndexHandle *)malloc(sizeof(IX_IndexHandle));
-	indexHandle->bOpen = false;
-	OpenIndex(indexName, indexHandle);
+	IX_IndexHandle indexHandle;
+	indexHandle.bOpen = false;
+	OpenIndex(indexName, &indexHandle);
 
 	//ÏòË÷ÒıÎÄ¼şÖĞ¼ÓÈëË÷ÒıÏî
 	//Ê×ÏÈ£¬´ò¿ª¼ÇÂ¼ÎÄ¼ş,É¨ÃèËùÓĞ¼ÇÂ¼
-	RM_FileHandle *recFileHandle;
-	RM_FileScan *recFileScan = NULL;
-	RM_Record *rec = NULL;
+	RM_FileHandle recFileHandle;
+	RM_FileScan recFileScan;
+	RM_Record rec;
 
-	recFileHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
-	recFileHandle->bOpen = false;
-	recFileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
-	recFileScan->bOpen = false;
-	rec = (RM_Record *)malloc(sizeof(RM_Record));
-	rec->bValid = false;
+	recFileHandle.bOpen = false;
+	recFileScan.bOpen = false;
+	rec.bValid = false;
 
-	RM_OpenFile(relName, recFileHandle);
-	OpenScan(recFileScan, recFileHandle, 0, NULL);
+	RM_OpenFile(relName, &recFileHandle);
+	OpenScan(&recFileScan, &recFileHandle, 0, NULL);
 
 	int attrOffset, attrLength;
-	memcpy(&attrOffset, colRec->pData + 42 + 2 * sizeof(int), sizeof(int));
-	memcpy(&attrLength, colRec->pData + 42 + sizeof(int), sizeof(int));
-	free(colRec);
+	memcpy(&attrOffset, colRec.pData + 42 + 2 * sizeof(int), sizeof(int));
+	memcpy(&attrLength, colRec.pData + 42 + sizeof(int), sizeof(int));
 
 	char *attrValue = NULL;
 	attrValue = (char *)malloc(sizeof(char)*attrLength);
 
 	//½«É¨Ãèµ½µÄ¼ÇÂ¼²åÈëµ½Ë÷ÒıÖĞ
-	while (GetNextRec(recFileScan, rec) == SUCCESS)
+	while (GetNextRec(&recFileScan, &rec) == SUCCESS)
 	{
-		memcpy(attrValue, rec->pData + attrOffset, attrLength);
-		InsertEntry(indexHandle, attrValue, &rec->rid);
+		memcpy(attrValue, rec.pData + attrOffset, attrLength);
+		InsertEntry(&indexHandle, attrValue, &rec.rid);
 
 	}
 
-	free(attrValue);
-	CloseScan(recFileScan); free(recFileScan);
-	RM_CloseFile(recFileHandle); free(recFileHandle);
-	CloseIndex(indexHandle); free(indexHandle);
+	CloseScan(&recFileScan);
+	RM_CloseFile(&recFileHandle);
+	CloseIndex(&indexHandle);
 
 	return SUCCESS;
 }
 
 RC DropIndex(char *indexName) {
-	IX_IndexHandle *indexHandle;
+	IX_IndexHandle indexHandle;
 	RC rc;
 
 	//ÅĞ¶ÏË÷ÒıÊÇ·ñ´æÔÚ
-	indexHandle = (IX_IndexHandle *)malloc(sizeof(IX_IndexHandle));
-	indexHandle->bOpen = false;
-	if ((rc = OpenIndex(indexName, indexHandle)) != SUCCESS)
+	indexHandle.bOpen = false;
+	if ((rc = OpenIndex(indexName, &indexHandle)) != SUCCESS)
 	{
 		return rc;
 	}
-	CloseIndex(indexHandle); free(indexHandle);
+	CloseIndex(&indexHandle);
 
 	//´Ó±íÊôĞÔÖĞÇå³ıË÷Òı±êÊ¶
-	RM_FileHandle *colHandle;
-	RM_FileScan *fileScan = NULL;
-	RM_Record *colRec = NULL;
+	RM_FileHandle colHandle;
+	RM_FileScan fileScan;
+	RM_Record colRec;
 
-	colHandle = (RM_FileHandle *)malloc(sizeof(RM_FileHandle));
-	colHandle->bOpen = false;
-	fileScan = (RM_FileScan *)malloc(sizeof(RM_FileScan));
-	fileScan->bOpen = false;
+	colHandle.bOpen = false;
+	fileScan.bOpen = false;
 
 	//´ò¿ªÏµÍ³ÁĞÎÄ¼ş
-	rc = RM_OpenFile("SYSCOLUMNS", colHandle);
+	rc = RM_OpenFile("SYSCOLUMNS", &colHandle);
 	if (rc != SUCCESS)
 	{
 		return rc;
@@ -525,24 +505,20 @@ RC DropIndex(char *indexName) {
 	(*conditions).bRhsIsAttr = 0;
 	(*conditions).Rvalue = indexName;
 
-	OpenScan(fileScan, colHandle, 1, conditions);
-	//OpenScan(fileScan, colHandle, 0, NULL);
+	OpenScan(&fileScan, &colHandle, 1, conditions);
 
-	colRec = (RM_Record *)malloc(sizeof(RM_Record));
-	rc = GetNextRec(fileScan, colRec);
-
+	rc = GetNextRec(&fileScan, &colRec);
 
 	if (rc == SUCCESS) {
-		*(colRec->pData + 42 + 3 * sizeof(int)) = '0';   //ÉèÖÃË÷Òı±êÊ¶Îª0
-		memset(colRec->pData + 42 + 3 * sizeof(int) + sizeof(char), '\0', 21);
+		*(colRec.pData + 42 + 3 * sizeof(int)) = '0';   //ÉèÖÃË÷Òı±êÊ¶Îª0
+		memset(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), '\0', 21);
 		//¸üĞÂÏµÍ³ÁĞÎÄ¼ş
-		UpdateRec(colHandle, colRec);
+		UpdateRec(&colHandle, &colRec);
 	}
 
 	//¹Ø±ÕÉ¨Ãè¼°ÏµÍ³ÁĞÎÄ¼ş
-	CloseScan(fileScan); free(fileScan);
-	RM_CloseFile(colHandle); free(colHandle);
-	free(conditions);
+	CloseScan(&fileScan);
+	RM_CloseFile(&colHandle);
 
 	DeleteFile((LPCTSTR)indexName);//É¾³ıÊı¾İ±íÎÄ¼ş
 

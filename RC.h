@@ -68,5 +68,5 @@ typedef enum {
 
 	DATABASE_FAILED //数据库创建或删除失败
 }RC;
-
+#define CHECK_RC(rc) if (rc != SUCCESS) {return rc;}
 #endif
