@@ -1228,19 +1228,19 @@ void showSelectResult(SelResult & res, CEditArea * editArea)
 			switch (type)
 			{
 			case AttrType::ints:
-				memcpy(&intNum, res.res[i][j], sizeof(int));
+				memcpy(&intNum, res.res[i][0] + res.offset[j], sizeof(int));
 				rows[i][j] = new char[32];
 				sprintf_s(rows[i][j], 32, "%d", intNum);
 				break;
 			case AttrType::floats:
-				memcpy(&floatNum, res.res[i][j], sizeof(float));
+				memcpy(&floatNum, res.res[i][0] + res.offset[j], sizeof(float));
 				y = res.length[j];
 				rows[i][j] = new char[32];
 				sprintf_s(rows[i][j], 32, "%f", floatNum);
 				break;
 			case AttrType::chars:
 				rows[i][j] = new char[res.length[j]];
-				strcpy_s(rows[i][j], res.length[j], res.res[i][j]);
+				memcpy(rows[i][j], res.res[i][0] + res.offset[j], res.length[j]);
 				break;
 			default:
 				break;

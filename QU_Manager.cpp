@@ -130,9 +130,7 @@ void Init_Result(SelResult * res) {
 
 void Destory_Result(SelResult * res) {
 	for (int i = 0; i < res->row_num; i++) {
-		for (int j = 0; j < res->col_num; j++) {
-			delete[] res->res[i][j];
-		}
+		delete[] res->res[i][0];
 		delete[] res->res[i];
 	}
 	if (res->next_res != NULL) {
@@ -312,6 +310,7 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 	res->col_num = selAttrInfo.size();
 	res->row_num = 0;
 	res->next_res = NULL;
+	int totalLenth = 0;
 	for (int i = 0; i < selAttrInfo.size(); i++) {
 		//属性类型
 		res->type[i] = selAttrInfo[i].type;
@@ -319,6 +318,7 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 		res->offset[i] = selAttrInfo[i].offset;
 		//属性长度
 		res->length[i] = selAttrInfo[i].length;
+		totalLenth += res->length[i];
 		//属性名
 		strcpy(res->fields[i], selAttrInfo[i].attrName.c_str());
 	}
@@ -334,9 +334,10 @@ RC Select(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **relations, i
 			curRes = curRes->next_res;
 		}
 
-		curRes->res[curRes->row_num] = new char*[res->col_num];
+		curRes->res[curRes->row_num] = new char*[1];
+		curRes->res[curRes->row_num][0] = new char[totalLenth];
 		for (int j = 0; j < selAttrInfo.size(); j++) {
-			curRes->res[curRes->row_num][j] = result[i][j];
+			memcpy(curRes->res[curRes->row_num][0] + selAttrInfo[j].offset, result[i][j], selAttrInfo[j].length);
 		}
 		curRes->row_num++;
 	}
