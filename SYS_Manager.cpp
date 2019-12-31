@@ -262,7 +262,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 		memcpy(pData + 42, &(attrtmp->attrType), sizeof(AttrType));
 		memcpy(pData + 42 + sizeof(AttrType), &(attrtmp->attrLength), sizeof(int));
 		memcpy(pData + 42 + sizeof(int) + sizeof(AttrType), &offset, sizeof(int));
-		pData[42 + 2 * sizeof(int) + sizeof(AttrType)] = 0;
+		memcpy(pData + 42 + 2 * sizeof(int) + sizeof(AttrType), "0", sizeof(char));
 		rid.bValid = false;
 		rc = InsertRec(&rm_column, pData, &rid);
 		if (rc != SUCCESS) {
@@ -366,7 +366,7 @@ RC DropTable(char *relName) {
 RC CreateIndex(char *indexName, char *relName, char *attrName) {
 	//修改属性信息，设置索引字段为存在索引
 	RC rc;
-	
+
 	RM_Record colRec;
 
 	//打开系统列文件
@@ -402,13 +402,12 @@ RC CreateIndex(char *indexName, char *relName, char *attrName) {
 		return rc;
 	}
 
-	char *IX_flag = &colRec.pData[42 + 3 * sizeof(int)];
-	if (*IX_flag != (char)0)
+	if (*(colRec.pData + 42 + 3 * sizeof(int)) != '0')
 	{
 		return FAIL;
 	}
 
-	*IX_flag = (char)1;   //设置索引标识为1
+	*(colRec.pData + 42 + 3 * sizeof(int)) = '1';   //设置索引标识为1
 	memset(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), '\0', 21);
 	memcpy(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), indexName, strlen(indexName));
 
