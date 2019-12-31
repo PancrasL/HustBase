@@ -190,10 +190,12 @@ void CTableList::displayTabInfo(CString ParentNode)
 		{
 			if (coltype[i][j] == chars)
 			{
-				char temp[21];
+				//char temp[21]; //原来的
+				char *temp = new char[collength[i][j]];//更改后
 				memcpy(temp, rec.pData + coloffset[i][j], collength[i][j]);
 				t = temp;
 				clc.SetItemText(k, j, t);
+				delete[] temp;
 			}
 			else if (coltype[i][j] == ints)
 			{

@@ -262,7 +262,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 		memcpy(pData + 42, &(attrtmp->attrType), sizeof(AttrType));
 		memcpy(pData + 42 + sizeof(AttrType), &(attrtmp->attrLength), sizeof(int));
 		memcpy(pData + 42 + sizeof(int) + sizeof(AttrType), &offset, sizeof(int));
-		memcpy(pData + 42 + 2 * sizeof(int) + sizeof(AttrType), "0", sizeof(char));
+		pData[42 + 2 * sizeof(int) + sizeof(AttrType)] = 0;
 		rid.bValid = false;
 		rc = InsertRec(&rm_column, pData, &rid);
 		if (rc != SUCCESS) {
@@ -402,12 +402,13 @@ RC CreateIndex(char *indexName, char *relName, char *attrName) {
 		return rc;
 	}
 
-	if (*(colRec.pData + 42 + 3 * sizeof(int)) != '0')
+	char *IX_flag = &colRec.pData[42 + 3 * sizeof(int)];
+	if (*IX_flag != (char)0)
 	{
 		return FAIL;
 	}
 
-	*(colRec.pData + 42 + 3 * sizeof(int)) = '1';   //设置索引标识为1
+	*IX_flag = (char)1;   //设置索引标识为1
 	memset(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), '\0', 21);
 	memcpy(colRec.pData + 42 + 3 * sizeof(int) + sizeof(char), indexName, strlen(indexName));
 
