@@ -1,0 +1,66 @@
+//导入初始数据
+Create table s(sno char(8), sname char(20), status int, city char(16));
+Create table p(pno char(8), pname char(20), color char(8), weight int);
+Create table j(jno char(8), jname char(20), city char(16));
+Create table spj(sno char(8), pno char(8), jno char(8), qty int);
+
+Insert into s values('S1', 'jingyi', 20, 'tianjin');
+Insert into s values('S2', 'shengxi', 10, 'beijing');
+Insert into s values('S3', 'dongfanghong', 30, 'beijing');
+Insert into s values('S4', 'fengtaisheng', 20, 'tianjin');
+Insert into s values('S5', 'weiming', 30, 'shanghai');
+
+Insert into p values('P1', 'luomu', 'red',12);
+Insert into p values('P2', 'luoshuan', 'green', 17);
+Insert into p values('P3', 'luosidao', 'blue', 14);
+Insert into p values('P4', 'luosidao', 'red', 14);
+Insert into p values('P5', 'aolun', 'blue', 40);
+Insert into p values('P6', 'chilun', 'red', 30);
+
+Insert into j values('J1', 'sanjian', 'beijing');
+Insert into j values('J2', 'yiqi', 'changchun');
+Insert into j values('J3', 'tanhuangchang', 'tianjin');
+Insert into j values('J4', 'zhaochuanchang', 'tianjin');
+Insert into j values('J5', 'jichechang', 'tangshan');
+Insert into j values('J6', 'wuxiandianchang', 'changzhou');
+Insert into j values('J7', 'bandaotichang', 'nanjing');
+
+Insert into spj values('S1', 'P1', 'J1', 200);
+Insert into spj values('S1', 'P1', 'J3', 100);
+Insert into spj values('S1', 'P1', 'J4', 700);
+Insert into spj values('S1', 'P2', 'J2', 100);
+
+Insert into spj values('S2', 'P3', 'J1', 400);
+Insert into spj values('S2', 'P3', 'J2', 200);
+Insert into spj values('S2', 'P3', 'J4', 500);
+Insert into spj values('S2', 'P3', 'J5', 400);
+Insert into spj values('S2', 'P5', 'J1', 400);
+Insert into spj values('S2', 'P5', 'J2', 100);
+
+Insert into spj values('S3', 'P1', 'J1', 200);
+Insert into spj values('S3', 'P3', 'J1', 200);
+
+Insert into spj values('S4', 'P5', 'J1', 100);
+Insert into spj values('S4', 'P6', 'J3', 300);
+Insert into spj values('S4', 'P6', 'J4', 200);
+
+Insert into spj values('S5', 'P2', 'J4', 100);
+Insert into spj values('S5', 'P3', 'J1', 200);
+Insert into spj values('S5', 'P6', 'J2', 200);
+Insert into spj values('S5', 'P6', 'J4', 500);
+
+
+//测试
+select spj.sno from spj where spj.jno = 'J1';
+select spj.sno from spj where spj.jno = 'J1' and spj.pno = 'P1';
+select s.sname, s.city from s;
+select spj.jno from spj where spj.sno = 'S1';
+select p.pname, p.color, p.weight from p;
+select p.pname, spj.qty from p, spj where p.pno = spj.pno and spj.jno = 'J2';
+select j.jname from j, spj, s where j.jno = spj.jno and s.sno = spj.sno and s.city = 'shanghai';
+
+select sname, pname, jname from s, p, j, spj where s.sno = spj.sno and p.pno = spj.pno and j.jno = spj.jno;
+select sname, sno, city from s;
+drop from s where sno = 'S2';
+update s set sname = 'newName' where sname ='dongfanghong';
+create index test on s(sno);

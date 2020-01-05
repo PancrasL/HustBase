@@ -283,7 +283,7 @@ RC multiTableSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **re
 	delete[] cons;
 
 	/*笛卡尔积*/
-	//初始化扫描序号为0 0 0 0...-1,每调用依次getNextDkr从最后一个数字开始依次增1例如0 0 -1 > 0 0 0 > 0 0 1
+	//初始化扫描序号为...0 0 -1,每调用依次getNextDkr从最后一个数字开始依次增1例如...0 0 -1 > ...0 0 0 > ...0 0 1
 	//每当第i位达到第i张表的记录数时，向前进一位
 	vector<int> scanSequence(nRelations, 0);
 	scanSequence.back() = -1;
@@ -325,7 +325,7 @@ RC multiTableSelect(int nSelAttrs, RelAttr **selAttrs, int nRelations, char **re
 				curRes->row_num = 0;
 				curRes->next_res = NULL;
 			}
-			//这样设置res的原因是为了兼容测试程序，测试程序认为一条记录的所有的属性顺序存放到char[]上，使用offset隔开
+			//这样设置res的原因是为了兼容测试程序，res二重指针为冗余设计。
 			curRes->res[curRes->row_num] = new char*;
 			*curRes->res[curRes->row_num] = new char[offset];
 			for (unsigned j = 0; j < selAttrVec.size(); j++) {
